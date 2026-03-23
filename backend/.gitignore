@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Firebase credentials (DO NOT commit sensitive files)
+firebaseServiceAccount.json
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS files
+Thumbs.db
+
+# Temporary files
+*.tmp
+.temp/
+
+# Build artifacts (if any)
+dist/
+build/
+
+# Database dumps
+*.mongo
+*.mongodb
