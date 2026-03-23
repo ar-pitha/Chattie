@@ -8,8 +8,6 @@ yarn.lock
 .env.local
 .env.*.local
 
-# Firebase credentials (DO NOT commit sensitive files)
-firebaseServiceAccount.json
 
 # Logs
 npm-debug.log*
