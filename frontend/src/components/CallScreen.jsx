@@ -1,7 +1,27 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import '../styles/CallScreen.css';
 
 const CallScreen = ({ callStatus, remoteUser, onEndCall, remoteAudioRef, isMuted }) => {
+  // Handle browser autoplay policy - allow audio to play on user click
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      if (remoteAudioRef?.current && remoteAudioRef.current.paused) {
+        console.log('▶️ User clicked, attempting to resume audio...');
+        remoteAudioRef.current.play().catch(err => {
+          console.error('❌ Still cannot play audio:', err);
+        });
+      }
+    };
+
+    const screenElement = document.querySelector('.call-screen');
+    if (screenElement) {
+      screenElement.addEventListener('click', handleUserInteraction);
+      return () => {
+        screenElement.removeEventListener('click', handleUserInteraction);
+      };
+    }
+  }, [remoteAudioRef]);
+
   if (!callStatus) return null;
 
   const getStatusMessage = () => {
@@ -21,11 +41,16 @@ const CallScreen = ({ callStatus, remoteUser, onEndCall, remoteAudioRef, isMuted
 
   return (
     <div className="call-screen">
+      {/* Audio element for receiving remote audio */}
       <audio 
         ref={remoteAudioRef} 
-        autoPlay 
-        playsInline 
+        autoPlay={false}
+        playsInline
         controls={false}
+        crossOrigin="anonymous"
+        onPlay={() => console.log('🎵 Audio started playing')}
+        onPause={() => console.log('⏸️ Audio paused')}
+        onError={(e) => console.error('Audio error:', e)}
       />
       
       <div className="call-overlay">

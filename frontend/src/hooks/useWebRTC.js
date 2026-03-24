@@ -40,19 +40,49 @@ export const useWebRTC = (currentUser, remoteUser) => {
 
     // Handle remote stream
     peerConnection.addEventListener('track', (event) => {
-      console.log('🎵 Remote audio track received:', event.track);
+      console.log('🎵 Remote audio track received');
+      console.log(`   Track kind: ${event.track.kind}`);
+      console.log(`   Track state: ${event.track.readyState}`);
+      console.log(`   Streams: ${event.streams.length}`);
+      
       if (remoteAudioRef.current) {
-        // Create new MediaStream with all tracks
-        if (!remoteAudioRef.current.srcObject) {
-          remoteAudioRef.current.srcObject = new MediaStream();
+        // Use the stream directly if available
+        if (event.streams && event.streams.length > 0) {
+          console.log('✅ Setting audio element srcObject to remote stream');
+          remoteAudioRef.current.srcObject = event.streams[0];
+        } else {
+          // Fallback: create MediaStream with tracks
+          console.log('⚠️  No streams in event, creating MediaStream');
+          if (!remoteAudioRef.current.srcObject) {
+            remoteAudioRef.current.srcObject = new MediaStream();
+          }
+          const remoteStream = remoteAudioRef.current.srcObject;
+          remoteStream.addTrack(event.track);
         }
-        const remoteStream = remoteAudioRef.current.srcObject;
-        remoteStream.addTrack(event.track);
         
         // Ensure audio element is ready to play
-        remoteAudioRef.current.play().catch(err => {
-          console.error('❌ Error playing audio:', err);
-        });
+        console.log('🔊 Attempting to play remote audio...');
+        // Make sure element is not muted and has correct attributes
+        remoteAudioRef.current.muted = false;
+        remoteAudioRef.current.volume = 1.0;
+        
+        const playPromise = remoteAudioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log('✅ Remote audio playing successfully');
+              console.log(`   Volume: ${remoteAudioRef.current.volume}`);
+            })
+            .catch(err => {
+              console.error('❌ Error playing audio:', err);
+              console.log('   Possible reasons: autoplay policy, muted tab, no audio data');
+              console.log('   Trying to resume on user interaction...');
+              // Store reference to try playing on user click
+              window.__remoteAudioRef = remoteAudioRef.current;
+            });
+        }
+      } else {
+        console.error('❌ remoteAudioRef is null');
       }
     });
 
@@ -80,27 +110,52 @@ export const useWebRTC = (currentUser, remoteUser) => {
     try {
       if (localStreamRef.current) return localStreamRef.current;
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
+      // Mobile-friendly audio constraints that adapt to device
+      const isMobile = /iPhone|iPad|Android|webOS/i.test(navigator.userAgent);
+      
+      const audioConstraints = {
+        audio: isMobile ? {
+          // Mobile: more lenient constraints
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true
+        } : {
+          // Desktop: stricter quality
+          echoCancellation: { exact: true },
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100
         },
         video: false
-      });
+      };
+
+      console.log(`📱 Requesting getUserMedia (mobile: ${isMobile})...`);
+      const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
 
       console.log('🎤 Local audio stream obtained');
+      console.log(`   Tracks: ${stream.getTracks().length}`);
+      stream.getTracks().forEach((track, i) => {
+        console.log(`   Track ${i}: ${track.kind}, enabled: ${track.enabled}, state: ${track.readyState}`);
+      });
+      
       localStreamRef.current = stream;
 
       // Add local audio tracks to peer connection
       const peerConnection = createPeerConnection();
       stream.getTracks().forEach((track) => {
-        peerConnection.addTrack(track, stream);
+        const sender = peerConnection.addTrack(track, stream);
+        console.log(`✅ Added ${track.kind} track to peer connection`);
       });
 
       return stream;
     } catch (error) {
       console.error('❌ Error getting local stream:', error);
+      const errorMsg = error.name === 'NotAllowedError' 
+        ? 'Microphone permission denied. Please allow access.' 
+        : error.name === 'NotFoundError' 
+        ? 'No microphone found on this device.' 
+        : error.message;
+      console.error(`   Reason: ${errorMsg}`);
       setCallStatus('ended');
       throw error;
     }
@@ -133,8 +188,9 @@ export const useWebRTC = (currentUser, remoteUser) => {
   // Create answer (receiver)
   const createAnswer = useCallback(async () => {
     try {
+      // Get local stream and ensure it's added to peer connection
       await getLocalStream();
-      // Use existing peer connection that already has remote description set
+      
       const peerConnection = peerConnectionRef.current;
       
       if (!peerConnection) {
@@ -142,8 +198,14 @@ export const useWebRTC = (currentUser, remoteUser) => {
         throw new Error('Peer connection not initialized');
       }
 
-      // Remote description should already be set in handleOffer
-      // Just create and set the answer
+      // Verify remote description is set
+      if (!peerConnection.remoteDescription) {
+        console.error('❌ Remote description not set. Cannot create answer.');
+        throw new Error('Remote description not set');
+      }
+
+      console.log('🔧 Creating answer with remote description set...');
+      
       const answer = await peerConnection.createAnswer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: false
@@ -152,6 +214,7 @@ export const useWebRTC = (currentUser, remoteUser) => {
       await peerConnection.setLocalDescription(answer);
 
       console.log('📥 Answer created:', answer);
+      console.log('   Local description state:', peerConnection.signalingState);
 
       return answer;
     } catch (error) {
@@ -207,12 +270,19 @@ export const useWebRTC = (currentUser, remoteUser) => {
   // Start call
   const startCall = useCallback(async () => {
     try {
+      console.log(`📞 Starting call to ${remoteUser}...`);
       const offer = await createOffer();
+      
+      console.log('✅ Offer created, sending to remote user...');
+      console.log(`   Peer connection state: ${peerConnectionRef.current?.signalingState}`);
+      
       getSocket().emit('call-user', {
         to: remoteUser,
         from: currentUser,
         offer
       });
+      
+      console.log('📤 Call signal sent');
     } catch (error) {
       console.error('❌ Error starting call:', error);
       setCallStatus('ended');
@@ -224,15 +294,24 @@ export const useWebRTC = (currentUser, remoteUser) => {
     try {
       setIncomingCall(false);
 
-      // Get the offer from the peer connection
+      // Get the peer connection that already has remote description set
       const peerConnection = peerConnectionRef.current;
       if (!peerConnection) {
         console.error('❌ No peer connection for accepting call');
         return;
       }
 
+      console.log('📋 Peer connection state before answer:');
+      console.log(`   Signaling state: ${peerConnection.signalingState}`);
+      console.log(`   Connection state: ${peerConnection.connectionState}`);
+      console.log(`   ICE connection state: ${peerConnection.iceConnectionState}`);
+
       const answer = await createAnswer();
       
+      console.log('✅ Answer created successfully');
+      console.log('📋 Peer connection state after answer:');
+      console.log(`   Signaling state: ${peerConnection.signalingState}`);
+
       setCallStatus('connected');
 
       getSocket().emit('answer-call', {
@@ -240,8 +319,11 @@ export const useWebRTC = (currentUser, remoteUser) => {
         from: currentUser,
         answer
       });
+
+      console.log('📤 Answer sent to caller');
     } catch (error) {
       console.error('❌ Error accepting call:', error);
+      console.error('   Error message:', error.message);
       setCallStatus('ended');
     }
   }, [createAnswer, incomingCaller, currentUser]);
@@ -313,6 +395,54 @@ export const useWebRTC = (currentUser, remoteUser) => {
     iceCandidatesRef.current = [];
   }, []);
 
+  // Debug helper to diagnose audio issues
+  const getAudioDebugInfo = useCallback(() => {
+    const info = {
+      audioElement: {
+        exists: !!remoteAudioRef.current,
+        muted: remoteAudioRef.current?.muted,
+        volume: remoteAudioRef.current?.volume,
+        paused: remoteAudioRef.current?.paused,
+        readyState: remoteAudioRef.current?.readyState,
+        networkState: remoteAudioRef.current?.networkState
+      },
+      stream: {
+        hasSrcObject: !!remoteAudioRef.current?.srcObject,
+        streamTracks: remoteAudioRef.current?.srcObject?.getTracks().length || 0,
+        trackStates: remoteAudioRef.current?.srcObject?.getTracks().map(t => ({
+          kind: t.kind,
+          enabled: t.enabled,
+          readyState: t.readyState
+        })) || []
+      },
+      peerConnection: {
+        exists: !!peerConnectionRef.current,
+        connectionState: peerConnectionRef.current?.connectionState,
+        iceConnectionState: peerConnectionRef.current?.iceConnectionState,
+        signalingState: peerConnectionRef.current?.signalingState,
+        iceGatheringState: peerConnectionRef.current?.iceGatheringState
+      },
+      callStatus
+    };
+    
+    console.log('🔍 Audio Debug Info:', info);
+    return info;
+  }, [callStatus]);
+
+  // Expose debug info globally for testing
+  useEffect(() => {
+    window.__webrtcDebug = {
+      getAudioDebugInfo,
+      remoteAudioRef,
+      peerConnectionRef,
+      localStreamRef
+    };
+    
+    return () => {
+      delete window.__webrtcDebug;
+    };
+  }, [getAudioDebugInfo]);
+
   return {
     callStatus,
     incomingCall,
@@ -326,6 +456,7 @@ export const useWebRTC = (currentUser, remoteUser) => {
     handleOffer,
     handleAnswer,
     handleIceCandidate,
-    cleanup
+    cleanup,
+    getAudioDebugInfo
   };
 };
