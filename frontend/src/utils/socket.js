@@ -112,6 +112,26 @@ export const onDeleteMessageForMe = (callback) => {
   socket.on('message_deleted_for_me', callback);
 };
 
+export const emitStartCall = (caller, receiver) => {
+  const socket = getSocket();
+  socket.emit('start_call', { caller, receiver });
+};
+
+export const emitEndCall = (caller, receiver) => {
+  const socket = getSocket();
+  socket.emit('end_call', { caller, receiver });
+};
+
+export const onIncomingCall = (callback) => {
+  const socket = getSocket();
+  socket.on('incoming_call', callback);
+};
+
+export const onCallEnded = (callback) => {
+  const socket = getSocket();
+  socket.on('call_ended', callback);
+};
+
 export const disconnectSocket = () => {
   if (socket) {
     socket.disconnect();

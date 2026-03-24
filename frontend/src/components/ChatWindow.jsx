@@ -1,12 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { chatAPI } from '../utils/api';
-import { onReceiveMessage, onDeleteMessage, onDeleteMessageForMe } from '../utils/socket';
+import { onReceiveMessage, onDeleteMessage, onDeleteMessageForMe, onTypingIndicator, onStopTyping } from '../utils/socket';
 import MessageActions from './MessageActions';
 import '../styles/ChatWindow.css';
 
 const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply }) => {
   const [loading, setLoading] = useState(false);
   const [activeMessageId, setActiveMessageId] = useState(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [onCall, setOnCall] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -84,6 +87,28 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply 
   }, [setMessages, currentUser.username]);
 
   useEffect(() => {
+    // Subscribe to typing indicator
+    const unsubscribe = onTypingIndicator((data) => {
+      if (data.username === selectedUser?.username && data.receiver === currentUser.username) {
+        setIsTyping(true);
+      }
+    });
+
+    return unsubscribe;
+  }, [selectedUser, currentUser.username]);
+
+  useEffect(() => {
+    // Subscribe to stop typing
+    const unsubscribe = onStopTyping((data) => {
+      if (data.username === selectedUser?.username && data.receiver === currentUser.username) {
+        setIsTyping(false);
+      }
+    });
+
+    return unsubscribe;
+  }, [selectedUser, currentUser.username]);
+
+  useEffect(() => {
     // Auto-scroll to bottom
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -124,6 +149,15 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply 
     }
   };
 
+  const handleStartCall = () => {
+    setOnCall(true);
+    alert(`📞 Calling ${selectedUser.username}...\n\nNote: Voice/Video calling is coming soon!`);
+  };
+
+  const handleEndCall = () => {
+    setOnCall(false);
+  };
+
   if (!selectedUser) {
     return (
       <div className="chat-window empty">
@@ -137,10 +171,24 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply 
   return (
     <div className="chat-window">
       <div className="chat-header">
-        <h2>{selectedUser.username}</h2>
-        <div className={`user-status ${selectedUser.isOnline ? 'online' : 'offline'}`}>
-          {selectedUser.isOnline ? 'Online' : 'Offline'}
+        <div className="header-info">
+          <h2>{selectedUser.username}</h2>
+          {isTyping ? (
+            <div className="typing-indicator">
+              <span>✍️ typing...</span>
+              <div className="typing-dots">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+          ) : (
+            <div className={`user-status ${selectedUser.isOnline ? 'online' : 'offline'}`}>
+              {selectedUser.isOnline ? '🟢 Online' : '🔘 Offline'}
+            </div>
+          )}
         </div>
+        <button className="call-btn" onClick={handleStartCall} disabled={!selectedUser.isOnline} title="Call user">
+          📞
+        </button>
       </div>
 
       <div className="messages-container">
@@ -169,6 +217,11 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply 
                   hour: '2-digit',
                   minute: '2-digit'
                 })}
+                {msg.sender === currentUser.username && (
+                  <span className={`read-status ${msg.isRead ? 'read' : 'delivered'}`}>
+                    {msg.isRead ? '✓✓' : '✓'}
+                  </span>
+                )}
               </div>
 
               {activeMessageId === msg._id && !msg.deletedForMe && (
