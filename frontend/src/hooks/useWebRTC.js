@@ -138,6 +138,15 @@ export const useWebRTC = (currentUser, remoteUser) => {
         
         // Try to play - use setTimeout to ensure DOM is ready
         setTimeout(() => {
+          if (!remoteAudioRef.current) {
+            console.error('❌ Audio element disappeared before play attempt');
+            return;
+          }
+          
+          // Check if device is mobile
+          const isMobile = /iPhone|iPad|Android|webOS/i.test(navigator.userAgent);
+          console.log(`📱 Device type: ${isMobile ? 'MOBILE' : 'DESKTOP'}`);
+          
           const playPromise = remoteAudioRef.current.play();
           if (playPromise !== undefined) {
             playPromise
@@ -145,6 +154,7 @@ export const useWebRTC = (currentUser, remoteUser) => {
                 console.log('✅ Remote audio playing successfully');
                 console.log(`   Volume: ${remoteAudioRef.current.volume}`);
                 console.log(`   Paused: ${remoteAudioRef.current.paused}`);
+                console.log(`   Muted: ${remoteAudioRef.current.muted}`);
               })
               .catch(err => {
                 console.error('❌ Error playing audio:', err);
@@ -152,8 +162,23 @@ export const useWebRTC = (currentUser, remoteUser) => {
                 console.error(`   Error message: ${err.message}`);
                 console.log('   Possible reasons: autoplay policy, muted tab, no audio data');
                 console.log('   Trying to resume on user interaction...');
-                // Store reference to try playing on user click
-                window.__remoteAudioRef = remoteAudioRef.current;
+                
+                // On mobile, try playing with lower volume first, then unmute on interaction
+                if (isMobile) {
+                  console.log('📱 Mobile detected - will retry on user click');
+                  remoteAudioRef.current.muted = false;
+                  remoteAudioRef.current.volume = 1.0;
+                  // Store reference to try playing on user click
+                  window.__remoteAudioRef = remoteAudioRef.current;
+                  window.__retryAudioPlay = () => {
+                    console.log('🔄 Retrying audio play on user interaction...');
+                    if (remoteAudioRef.current && remoteAudioRef.current.paused) {
+                      remoteAudioRef.current.play()
+                        .then(() => console.log('✅ Audio playing after user interaction'))
+                        .catch(e => console.error('❌ Still failed:', e));
+                    }
+                  };
+                }
               });
           }
         }, 0);

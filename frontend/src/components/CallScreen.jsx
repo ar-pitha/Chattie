@@ -28,19 +28,38 @@ const CallScreen = ({
   // Handle browser autoplay policy - allow audio to play on user click
   useEffect(() => {
     const handleUserInteraction = () => {
-      if (remoteAudioRef?.current && remoteAudioRef.current.paused) {
-        console.log('▶️ User clicked, attempting to resume audio...');
-        remoteAudioRef.current.play().catch(err => {
-          console.error('❌ Still cannot play audio:', err);
-        });
+      console.log('👆 User interaction detected');
+      
+      if (remoteAudioRef?.current) {
+        // Try to play audio on user click
+        if (remoteAudioRef.current.paused) {
+          console.log('▶️ User clicked, attempting to resume audio...');
+          remoteAudioRef.current.play()
+            .then(() => {
+              console.log('✅ Audio resumed after user click');
+              console.log(`   Paused: ${remoteAudioRef.current.paused}`);
+              console.log(`   Volume: ${remoteAudioRef.current.volume}`);
+            })
+            .catch(err => {
+              console.error('❌ Still cannot play audio:', err);
+            });
+        }
+      }
+      
+      // Also try the global retry function if it exists
+      if (window.__retryAudioPlay) {
+        console.log('🔄 Calling global retry function...');
+        window.__retryAudioPlay();
       }
     };
 
     const screenElement = document.querySelector('.call-screen');
     if (screenElement) {
       screenElement.addEventListener('click', handleUserInteraction);
+      screenElement.addEventListener('touchstart', handleUserInteraction);
       return () => {
         screenElement.removeEventListener('click', handleUserInteraction);
+        screenElement.removeEventListener('touchstart', handleUserInteraction);
       };
     }
   }, [remoteAudioRef]);
