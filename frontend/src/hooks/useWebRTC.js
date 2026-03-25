@@ -253,8 +253,16 @@ export const useWebRTC = (currentUser, remoteUser) => {
   // Create offer (initiator)
   const createOffer = useCallback(async () => {
     try {
+      console.log('📋 Creating offer - getting local stream first...');
       await getLocalStream();
       const peerConnection = createPeerConnection();
+
+      // Check if senders exist (local tracks added)
+      const senders = peerConnection.getSenders();
+      console.log(`📨 Current senders (local tracks): ${senders.length}`);
+      senders.forEach((sender, i) => {
+        console.log(`   Sender ${i}: ${sender.track?.kind} - enabled: ${sender.track?.enabled}`);
+      });
 
       const offer = await peerConnection.createOffer({
         offerToReceiveAudio: true,
@@ -264,6 +272,7 @@ export const useWebRTC = (currentUser, remoteUser) => {
       await peerConnection.setLocalDescription(offer);
 
       console.log('📤 Offer created:', offer);
+      console.log('   Signaling state:', peerConnection.signalingState);
       setCallStatus('calling');
 
       return offer;
@@ -277,7 +286,8 @@ export const useWebRTC = (currentUser, remoteUser) => {
   // Create answer (receiver)
   const createAnswer = useCallback(async () => {
     try {
-      // Get local stream and ensure it's added to peer connection
+      // Get local stream and ensure it's added to peer connection FIRST
+      console.log('📋 Creating answer - getting local stream first...');
       await getLocalStream();
       
       const peerConnection = peerConnectionRef.current;
@@ -292,6 +302,13 @@ export const useWebRTC = (currentUser, remoteUser) => {
         console.error('❌ Remote description not set. Cannot create answer.');
         throw new Error('Remote description not set');
       }
+
+      // Check if senders exist (local tracks added)
+      const senders = peerConnection.getSenders();
+      console.log(`📨 Current senders (local tracks): ${senders.length}`);
+      senders.forEach((sender, i) => {
+        console.log(`   Sender ${i}: ${sender.track?.kind} - enabled: ${sender.track?.enabled}`);
+      });
 
       console.log('🔧 Creating answer with remote description set...');
       
@@ -493,12 +510,19 @@ export const useWebRTC = (currentUser, remoteUser) => {
   // Start call timer
   const startCallTimer = useCallback(() => {
     console.log('⏱️ Starting call timer...');
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+    }
+    
     callStartTimeRef.current = Date.now();
     setCallDuration(0);
     
     timerIntervalRef.current = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - callStartTimeRef.current) / 1000);
-      setCallDuration(elapsed);
+      if (callStartTimeRef.current) {
+        const elapsed = Math.floor((Date.now() - callStartTimeRef.current) / 1000);
+        setCallDuration(elapsed);
+        console.log(`⏱️ Call duration: ${elapsed}s`);
+      }
     }, 1000);
 
     // Start monitoring network quality
@@ -694,7 +718,8 @@ export const useWebRTC = (currentUser, remoteUser) => {
         volume: remoteAudioRef.current?.volume,
         paused: remoteAudioRef.current?.paused,
         readyState: remoteAudioRef.current?.readyState,
-        networkState: remoteAudioRef.current?.networkState
+        networkState: remoteAudioRef.current?.networkState,
+        currentTime: remoteAudioRef.current?.currentTime
       },
       stream: {
         hasSrcObject: !!remoteAudioRef.current?.srcObject,
@@ -705,19 +730,32 @@ export const useWebRTC = (currentUser, remoteUser) => {
           readyState: t.readyState
         })) || []
       },
+      localStream: {
+        hasTracks: !!localStreamRef.current?.getTracks().length,
+        trackCount: localStreamRef.current?.getTracks().length || 0,
+        tracks: localStreamRef.current?.getTracks().map(t => ({
+          kind: t.kind,
+          enabled: t.enabled,
+          readyState: t.readyState
+        })) || []
+      },
       peerConnection: {
         exists: !!peerConnectionRef.current,
         connectionState: peerConnectionRef.current?.connectionState,
         iceConnectionState: peerConnectionRef.current?.iceConnectionState,
         signalingState: peerConnectionRef.current?.signalingState,
-        iceGatheringState: peerConnectionRef.current?.iceGatheringState
+        iceGatheringState: peerConnectionRef.current?.iceGatheringState,
+        senders: peerConnectionRef.current?.getSenders().length || 0,
+        receivers: peerConnectionRef.current?.getReceivers().length || 0
       },
-      callStatus
+      callStatus,
+      isMuted,
+      speakerEnabled
     };
     
-    console.log('🔍 Audio Debug Info:', info);
+    console.log('🔍 AUDIO DEBUG INFO:', JSON.stringify(info, null, 2));
     return info;
-  }, [callStatus]);
+  }, [callStatus, isMuted, speakerEnabled]);
 
   // Expose debug info globally for testing
   useEffect(() => {
