@@ -82,7 +82,7 @@ const CallScreen = ({
       {/* Audio element for receiving remote audio */}
       <audio 
         ref={remoteAudioRef} 
-        autoPlay={false}
+        autoPlay={true}
         playsInline
         controls={false}
         crossOrigin="anonymous"
