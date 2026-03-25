@@ -347,13 +347,27 @@ export const useWebRTC = (currentUser, remoteUser) => {
       
       // START TIMER FOR CALLER when answer is received
       // The call is now established (caller has sent offer, receiver has sent answer)
-      startCallTimer();
-      console.log('⏱️ Call timer started (caller received answer)');
+      // Note: We need to start the timer here, but we use a direct reference to avoid circular dependency
+      if (callStartTimeRef.current === null) {
+        callStartTimeRef.current = Date.now();
+        setCallDuration(0);
+        
+        timerIntervalRef.current = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - callStartTimeRef.current) / 1000);
+          setCallDuration(elapsed);
+        }, 1000);
+
+        // Start monitoring network quality
+        monitorNetworkQuality();
+        statsIntervalRef.current = setInterval(monitorNetworkQuality, 2000);
+        
+        console.log('⏱️ Call timer started (caller received answer)');
+      }
     } catch (error) {
       console.error('❌ Error handling answer:', error);
       console.error('   Error message:', error.message);
     }
-  }, [startCallTimer]);
+  }, [monitorNetworkQuality]);
 
   // Handle ICE candidate
   const handleIceCandidate = useCallback(async (candidate) => {
