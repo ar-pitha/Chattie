@@ -5,7 +5,29 @@ import { callAPI } from '../utils/api';
 const STUN_SERVERS = [
   'stun:stun.l.google.com:19302',
   'stun:stun1.l.google.com:19302',
-  'stun:stun2.l.google.com:19302'
+  'stun:stun2.l.google.com:19302',
+  'stun:stun3.l.google.com:19302',
+  'stun:stun4.l.google.com:19302',
+  'stun:stunserver.org:3478'
+];
+
+// TURN servers for better connectivity across networks (mobile, different ISPs, etc)
+const TURN_SERVERS = [
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  }
 ];
 
 export const useWebRTC = (currentUser, remoteUser) => {
@@ -31,9 +53,18 @@ export const useWebRTC = (currentUser, remoteUser) => {
   const createPeerConnection = useCallback(() => {
     if (peerConnectionRef.current) return peerConnectionRef.current;
 
+    // Combine STUN and TURN servers for better connectivity
+    const iceServers = [
+      ...STUN_SERVERS.map(url => ({ urls: url })),
+      ...TURN_SERVERS
+    ];
+
     const config = {
-      iceServers: STUN_SERVERS.map(url => ({ urls: url }))
+      iceServers: iceServers,
+      iceCandidatePoolSize: 10
     };
+
+    console.log('🔧 Creating peer connection with ICE servers:', iceServers.length);
 
     const peerConnection = new RTCPeerConnection(config);
 

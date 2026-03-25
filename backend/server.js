@@ -18,8 +18,18 @@ const allowedOriginsIO = [
 const io = socketIO(server, {
   cors: {
     origin: allowedOriginsIO,
-    methods: ['GET', 'POST']
-  }
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  // Polling support for stability on free tiers (Render)
+  transports: ['websocket', 'polling'],
+  
+  // Connection handling
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  
+  // Allow many connections
+  maxHttpBufferSize: 1e6
 });
 
 // Database

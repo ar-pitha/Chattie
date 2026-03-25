@@ -8,10 +8,24 @@ let currentUsername = null;
 export const initializeSocket = () => {
   if (!socket) {
     socket = io(SOCKET_URL, {
+      // Transport options - polling is more reliable on free tiers like Render
+      transports: ['websocket', 'polling'],
+      
+      // Reconnection settings for production
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: 5
+      reconnectionDelayMax: 10000,
+      reconnectionAttempts: Infinity,
+      
+      // Improve connection stability
+      path: '/socket.io/',
+      
+      // For HTTPS (production)
+      secure: SOCKET_URL.startsWith('https'),
+      rejectUnauthorized: false,
+      
+      // Handle connection timeouts
+      connectTimeout: 10000
     });
 
     socket.on('connect', () => {
