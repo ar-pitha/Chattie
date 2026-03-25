@@ -76,11 +76,19 @@ export const useWebRTC = (currentUser, remoteUser) => {
         console.log(`   Protocol: ${event.candidate.protocol}`);
         console.log(`   Address: ${event.candidate.address}`);
         
-        getSocket().emit('ice-candidate', {
-          to: remoteUser,
-          candidate: event.candidate
-        });
-        console.log(`   ✅ Sent to ${remoteUser}`);
+        // Use incomingCaller if we're receiving a call, otherwise use remoteUser (for outgoing calls)
+        const target = incomingCaller || remoteUser;
+        console.log(`   Target user: ${target}`);
+        
+        if (target) {
+          getSocket().emit('ice-candidate', {
+            to: target,
+            candidate: event.candidate
+          });
+          console.log(`   ✅ Sent to ${target}`);
+        } else {
+          console.error('   ❌ No target user for ICE candidate (both incomingCaller and remoteUser undefined)');
+        }
       } else {
         console.log('ℹ️ ICE candidate gathering complete');
       }
@@ -192,7 +200,7 @@ export const useWebRTC = (currentUser, remoteUser) => {
 
     peerConnectionRef.current = peerConnection;
     return peerConnection;
-  }, [remoteUser]);
+  }, [remoteUser, incomingCaller]);
 
   // Get local audio stream
   const getLocalStream = useCallback(async () => {
