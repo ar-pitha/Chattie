@@ -40,6 +40,9 @@ export const useWebRTC = (currentUser, remoteUser) => {
   const [networkQuality, setNetworkQuality] = useState('good'); // excellent, good, fair, poor
   const [networkWarning, setNetworkWarning] = useState(null);
 
+  // Capture the remote user at call time so it doesn't become undefined if selectedUser changes
+  const callRemoteUserRef = useRef(null);
+
   const peerConnectionRef = useRef(null);
   const localStreamRef = useRef(null);
   const remoteAudioRef = useRef(null);
@@ -76,8 +79,8 @@ export const useWebRTC = (currentUser, remoteUser) => {
         console.log(`   Protocol: ${event.candidate.protocol}`);
         console.log(`   Address: ${event.candidate.address}`);
         
-        // Use incomingCaller if we're receiving a call, otherwise use remoteUser (for outgoing calls)
-        const target = incomingCaller || remoteUser;
+        // Use callRemoteUserRef first (captured at call start), then fallback to incomingCaller or remoteUser
+        const target = callRemoteUserRef.current || incomingCaller || remoteUser;
         console.log(`   Target user: ${target}`);
         
         if (target) {
@@ -87,7 +90,7 @@ export const useWebRTC = (currentUser, remoteUser) => {
           });
           console.log(`   ✅ Sent to ${target}`);
         } else {
-          console.error('   ❌ No target user for ICE candidate (both incomingCaller and remoteUser undefined)');
+          console.error('   ❌ No target user for ICE candidate (all sources undefined)');
         }
       } else {
         console.log('ℹ️ ICE candidate gathering complete');
@@ -341,6 +344,9 @@ export const useWebRTC = (currentUser, remoteUser) => {
   // Handle incoming offer
   const handleOffer = useCallback(async (offer, from) => {
     try {
+      console.log(`📨 Offer received from ${from}`);
+      callRemoteUserRef.current = from; // Capture the caller for this call
+      
       await getLocalStream();
       const peerConnection = createPeerConnection();
 
@@ -557,11 +563,18 @@ export const useWebRTC = (currentUser, remoteUser) => {
   const saveCallHistory = useCallback(async (status = 'completed') => {
     try {
       const duration = callDuration;
-      console.log(`💾 Saving call: ${currentUser} → ${remoteUser} (${duration}s, ${networkQuality})`);
+      const targetUser = callRemoteUserRef.current || incomingCaller;
+      
+      console.log(`💾 Saving call: ${currentUser} → ${targetUser} (${duration}s, ${networkQuality})`);
+      
+      if (!currentUser || !targetUser) {
+        console.error(`❌ Cannot save call: currentUser=${currentUser}, targetUser=${targetUser}`);
+        return;
+      }
       
       await callAPI.saveCall(
         currentUser,
-        remoteUser,
+        targetUser,
         duration,
         status,
         networkQuality
@@ -570,16 +583,20 @@ export const useWebRTC = (currentUser, remoteUser) => {
       console.log('✅ Call saved to history');
     } catch (error) {
       console.error('❌ Error saving call history:', error);
+      console.error('   Error details:', error.response?.data || error.message);
     }
-  }, [callDuration, networkQuality, currentUser, remoteUser]);
+  }, [callDuration, networkQuality, currentUser, incomingCaller]);
 
   // Cleanup resources (defined before functions that use it)
   const cleanup = useCallback(() => {
+    console.log('🧹 Cleaning up WebRTC resources...');
+    
     // Stop timers
     stopCallTimer();
 
     // Reset timer reference for next call
     callStartTimeRef.current = null;
+    callRemoteUserRef.current = null; // Reset captured remote user
 
     // Close peer connection
     if (peerConnectionRef.current) {
@@ -599,12 +616,21 @@ export const useWebRTC = (currentUser, remoteUser) => {
     }
 
     iceCandidatesRef.current = [];
+    
+    console.log('✅ Cleanup complete');
   }, [stopCallTimer]);
 
   // Start call
   const startCall = useCallback(async () => {
     try {
       console.log(`📞 Starting call to ${remoteUser}...`);
+      callRemoteUserRef.current = remoteUser; // Capture remote user for this call
+      
+      if (!remoteUser) {
+        console.error('❌ Cannot start call: remoteUser is undefined');
+        return;
+      }
+      
       const offer = await createOffer();
       
       console.log('✅ Offer created, sending to remote user...');
