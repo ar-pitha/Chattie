@@ -71,11 +71,18 @@ export const useWebRTC = (currentUser, remoteUser) => {
     // Handle ICE candidates
     peerConnection.addEventListener('icecandidate', (event) => {
       if (event.candidate) {
-        console.log('📡 ICE Candidate:', event.candidate);
+        console.log('📡 ICE Candidate generated');
+        console.log(`   Type: ${event.candidate.type}`);
+        console.log(`   Protocol: ${event.candidate.protocol}`);
+        console.log(`   Address: ${event.candidate.address}`);
+        
         getSocket().emit('ice-candidate', {
           to: remoteUser,
           candidate: event.candidate
         });
+        console.log(`   ✅ Sent to ${remoteUser}`);
+      } else {
+        console.log('ℹ️ ICE candidate gathering complete');
       }
     });
 
@@ -85,6 +92,13 @@ export const useWebRTC = (currentUser, remoteUser) => {
       console.log(`   Track kind: ${event.track.kind}`);
       console.log(`   Track state: ${event.track.readyState}`);
       console.log(`   Streams: ${event.streams.length}`);
+      
+      // Fallback: Mark call as connected when we receive remote audio
+      // (in case connectionstatechange event doesn't fire)
+      if (event.track.kind === 'audio') {
+        console.log('✅ Audio track received - updating call status to connected');
+        setCallStatus('connected');
+      }
       
       if (remoteAudioRef.current) {
         // Use the stream directly if available
@@ -140,6 +154,30 @@ export const useWebRTC = (currentUser, remoteUser) => {
       ) {
         endCall();
       }
+    });
+
+    // Monitor ICE connection state (critical for call establishment)
+    peerConnection.addEventListener('iceconnectionstatechange', () => {
+      console.log('❄️ ICE connection state:', peerConnection.iceConnectionState);
+      console.log(`   Signaling state: ${peerConnection.signalingState}`);
+      console.log(`   Connection state: ${peerConnection.connectionState}`);
+      
+      if (peerConnection.iceConnectionState === 'failed') {
+        console.error('❌ ICE connection FAILED - no connection possible');
+        console.error('   Possible causes:');
+        console.error('   1. STUN/TURN servers unreachable');
+        console.error('   2. Firewall blocking P2P');
+        console.error('   3. No compatible ICE candidates');
+      } else if (peerConnection.iceConnectionState === 'connected') {
+        console.log('✅ ICE connection established');
+      } else if (peerConnection.iceConnectionState === 'checking') {
+        console.log('🔍 ICE candidates being checked...');
+      }
+    });
+
+    // Monitor ICE gatherer state
+    peerConnection.addEventListener('icegatheringstatechange', () => {
+      console.log('🧊 ICE gathering state:', peerConnection.iceGatheringState);
     });
 
     peerConnectionRef.current = peerConnection;
@@ -286,12 +324,29 @@ export const useWebRTC = (currentUser, remoteUser) => {
   const handleAnswer = useCallback(async (answer) => {
     try {
       const peerConnection = peerConnectionRef.current;
-      if (peerConnection) {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-        console.log('📩 Answer received:', answer);
+      if (!peerConnection) {
+        console.error('❌ No peer connection when handling answer');
+        return;
       }
+
+      console.log('📩 Answer received');
+      console.log(`   Current signaling state: ${peerConnection.signalingState}`);
+      console.log(`   Current ICE connection state: ${peerConnection.iceConnectionState}`);
+      
+      // Verify we have an offer pending
+      if (peerConnection.signalingState !== 'have-local-offer') {
+        console.warn(`⚠️ Unexpected signaling state: ${peerConnection.signalingState}`);
+        console.warn('   Expected: have-local-offer');
+      }
+
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+      
+      console.log('✅ Remote description set (answer)');
+      console.log(`   New signaling state: ${peerConnection.signalingState}`);
+      console.log(`   ICE connection state: ${peerConnection.iceConnectionState}`);
     } catch (error) {
       console.error('❌ Error handling answer:', error);
+      console.error('   Error message:', error.message);
     }
   }, []);
 
@@ -299,12 +354,31 @@ export const useWebRTC = (currentUser, remoteUser) => {
   const handleIceCandidate = useCallback(async (candidate) => {
     try {
       const peerConnection = peerConnectionRef.current;
-      if (peerConnection && candidate) {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-        console.log('✅ ICE candidate added');
+      if (!peerConnection) {
+        console.error('❌ No peer connection for adding ICE candidate');
+        return;
       }
+
+      if (!candidate) {
+        console.log('ℹ️ Null ICE candidate (gathering complete)');
+        return;
+      }
+
+      console.log('❄️ Adding ICE candidate');
+      console.log(`   Candidate: ${candidate.candidate?.substring(0, 50)}...`);
+      console.log(`   Current ICE connection state: ${peerConnection.iceConnectionState}`);
+      
+      await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      
+      console.log('✅ ICE candidate added successfully');
     } catch (error) {
-      console.error('❌ Error adding ICE candidate:', error);
+      // Ignore errors for candidates that arrive before remote description
+      if (error.code === 11 || error.name === 'InvalidStateError') {
+        console.warn('⚠️ ICE candidate ignored (remote description not set yet)');
+      } else {
+        console.error('❌ Error adding ICE candidate:', error);
+        console.error('   Error name:', error.name);
+      }
     }
   }, []);
 
