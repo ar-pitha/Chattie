@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { chatAPI, notificationAPI } from '../utils/api';
-import { emitSendMessage, emitTyping, emitStopTyping } from '../utils/socket';
+import { emitTyping, emitStopTyping } from '../utils/socket';
 import ReplyPreview from './ReplyPreview';
 import '../styles/MessageInput.css';
 
@@ -61,10 +61,7 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
       };
       onMessageSent?.(messageForState);
 
-      // 2. Emit via socket (receiver will respond with delivered/seen)
-      emitSendMessage(currentUser.username, selectedUser.username, messageText, replyData, savedMessage);
-
-      // 3. Send push notification (fire-and-forget, don't block)
+      // 2. Send push notification (fire-and-forget, don't block)
       notificationAPI.sendNotificationByUsername(
         selectedUser.username,
         currentUser.username,

@@ -139,6 +139,13 @@ exports.saveMessage = async (req, res) => {
     }
 
     const messageObject = message.toObject();
+
+    // Emit receive_message to receiver in real-time (server-authoritative delivery)
+    // This ensures the receiver always gets the message even if client socket is unstable
+    if (io) {
+      io.to(`user_${receiver}`).emit('receive_message', messageObject);
+    }
+
     res.status(201).json({ message: 'Message saved successfully', data: messageObject });
   } catch (error) {
     res.status(500).json({ message: 'Error saving message', error: error.message });

@@ -101,23 +101,6 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('user_online', { username });
   });
 
-  // Send message event
-  socket.on('send_message', (data) => {
-    console.log(`Message from ${data.sender} to ${data.receiver}: ${data.text}`);
-    
-    // Emit to all OTHER clients (not back to sender)
-    // Sender already added message locally via onMessageSent callback
-    // If data has _id (full saved message), emit it as-is; otherwise construct a new object
-    const messageToSend = data._id ? data : {
-      sender: data.sender,
-      receiver: data.receiver,
-      text: data.text,
-      replyTo: data.replyTo || null,
-      timestamp: new Date()
-    };
-    socket.broadcast.emit('receive_message', messageToSend);
-  });
-
   // Delete message for everyone
   socket.on('delete_message', (data) => {
     console.log(`Message ${data.messageId} deleted by user`);
