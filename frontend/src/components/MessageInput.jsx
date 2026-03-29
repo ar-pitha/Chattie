@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { chatAPI, notificationAPI } from '../utils/api';
 import { emitSendMessage, emitTyping, emitStopTyping } from '../utils/socket';
 import ReplyPreview from './ReplyPreview';
@@ -9,6 +9,12 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
   const [loading, setLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = React.useRef(null);
+  const inputRef = useRef(null);
+
+  // Auto-focus input when chat opens or selected user changes
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [selectedUser?.username]);
 
   const handleTyping = () => {
     if (!isTyping) {
@@ -70,6 +76,8 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
       setText(messageText);
     } finally {
       setLoading(false);
+      // Delay focus so React re-enables the input first
+      setTimeout(() => inputRef.current?.focus(), 0);
     }
   };
 
@@ -80,6 +88,7 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
       )}
       <form className="message-input" onSubmit={handleSendMessage}>
         <input
+          ref={inputRef}
           type="text"
           placeholder="Type a message"
           value={text}

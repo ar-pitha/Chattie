@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { usersAPI } from '../utils/api';
 import '../styles/Sidebar.css';
 
-const Sidebar = ({ currentUser, selectedUser, onSelectUser, users, setUsers, unreadCounts, typingUsers, lastMessageTimes }) => {
+const Sidebar = ({ currentUser, selectedUser, onSelectUser, users, setUsers, unreadCounts, typingUsers, lastMessageTimes, lastMessages }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -88,10 +88,13 @@ const Sidebar = ({ currentUser, selectedUser, onSelectUser, users, setUsers, unr
                   <div className="user-item-bottom">
                     {isUserTyping ? (
                       <span className="user-typing-text">typing...</span>
-                    ) : (
-                      <span className={`user-status-text ${user.isOnline ? 'online' : ''}`}>
-                        {user.isOnline ? 'online' : 'offline'}
+                    ) : lastMessages?.[user.username] ? (
+                      <span className="user-last-message">
+                        {lastMessages[user.username].sender === currentUser.username ? 'You: ' : ''}
+                        {lastMessages[user.username].text}
                       </span>
+                    ) : (
+                      <span className="user-status-text">Start a conversation</span>
                     )}
                     {unreadCount > 0 && (
                       <div className="unread-badge">{unreadCount > 99 ? '99+' : unreadCount}</div>

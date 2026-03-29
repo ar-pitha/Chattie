@@ -49,6 +49,9 @@ export const usersAPI = {
 };
 
 export const chatAPI = {
+  getLastMessages: (username) =>
+    axios.get(`${API_BASE_URL}/chat/last-messages/${username}`),
+
   getMessages: (sender, receiver) =>
     axios.get(`${API_BASE_URL}/chat/messages`, { params: { sender, receiver } }),
 

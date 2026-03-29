@@ -170,10 +170,18 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
   const fetchMessages = async () => {
     setLoading(true);
     try {
-      // getMessages API already marks unseen messages as 'seen' in DB
-      // and emits message-status-updated to the sender via socket
       const response = await chatAPI.getMessages(currentUser.username, selectedUser.username);
       setMessages(response.data);
+
+      // Mark unseen messages from the other user as 'seen' via socket
+      // This notifies the sender in real-time so their ticks update
+      const unseenFromOther = response.data.filter(
+        (msg) => msg.sender === selectedUser.username && msg.status !== 'seen'
+      );
+      unseenFromOther.forEach((msg) => {
+        emitMessageSeen(msg._id, currentUser.username, msg.sender);
+      });
+
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
     } catch (error) {
       console.error('Error fetching messages:', error);

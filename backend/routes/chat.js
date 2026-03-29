@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const chatController = require('../controllers/chatController');
 
+router.get('/last-messages/:username', chatController.getLastMessages);
 router.get('/messages', chatController.getMessages);
 router.post('/messages', chatController.saveMessage);
 router.post('/messages/delete-for-me', chatController.deleteMessageForMe);

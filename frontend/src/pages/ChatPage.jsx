@@ -4,8 +4,8 @@ import ChatWindow from '../components/ChatWindow';
 import MessageInput from '../components/MessageInput';
 import AppLockModal from '../components/AppLockModal';
 import Settings from '../components/Settings';
-import { authAPI, usersAPI } from '../utils/api';
-import { disconnectSocket, emitUserLogout, initializeSocket, emitUserJoin, onUnreadCountUpdated, onUnreadCountCleared, emitClearUnreadCount, onUserOnline, onUserOffline, onTypingIndicator, onStopTyping, emitUserAway, emitUserBack } from '../utils/socket';
+import { authAPI, usersAPI, chatAPI } from '../utils/api';
+import { disconnectSocket, emitUserLogout, initializeSocket, emitUserJoin, onUnreadCountUpdated, onUnreadCountCleared, emitClearUnreadCount, onUserOnline, onUserOffline, onTypingIndicator, onStopTyping, emitUserAway, emitUserBack, onReceiveMessage } from '../utils/socket';
 import { setupForegroundNotifications, requestFCMToken, registerServiceWorker } from '../utils/firebase';
 import { useAppSecurity, setAppLockSession, wasAppLocked } from '../utils/security';
 import '../styles/ChatPage.css';
@@ -21,8 +21,17 @@ const ChatPage = ({ currentUser, onLogout }) => {
   const [unreadCounts, setUnreadCounts] = useState({});
   // Track who is typing (for sidebar display)
   const [typingUsers, setTypingUsers] = useState({});
-  // Track last message timestamp per user for sorting
-  const [lastMessageTimes, setLastMessageTimes] = useState({});
+  // Track last message per user for sidebar display and sorting
+  // { username: { text, sender, timestamp, status } }
+  const [lastMessages, setLastMessages] = useState({});
+  // Keep lastMessageTimes derived from lastMessages for sorting
+  const lastMessageTimes = React.useMemo(() => {
+    const times = {};
+    Object.entries(lastMessages).forEach(([user, msg]) => {
+      times[user] = new Date(msg.timestamp).getTime();
+    });
+    return times;
+  }, [lastMessages]);
 
   const handleClearUnread = useCallback((username) => {
     setUnreadCounts((prev) => { const u = { ...prev }; delete u[username]; return u; });
@@ -39,9 +48,12 @@ const ChatPage = ({ currentUser, onLogout }) => {
 
   const handleMessageSent = useCallback((message) => {
     setMessages((prev) => [...prev, message]);
-    // Update last message time for the receiver (for sorting)
+    // Update last message for the receiver (for sidebar display and sorting)
     if (message.receiver) {
-      setLastMessageTimes((prev) => ({ ...prev, [message.receiver]: Date.now() }));
+      setLastMessages((prev) => ({
+        ...prev,
+        [message.receiver]: { text: message.text, sender: message.sender, timestamp: message.timestamp || new Date().toISOString(), status: message.status || 'sent' }
+      }));
     }
   }, []);
 
@@ -118,6 +130,15 @@ const ChatPage = ({ currentUser, onLogout }) => {
     }
   }, [currentUser._id]);
 
+  // Fetch last messages for sidebar display
+  useEffect(() => {
+    if (currentUser.username) {
+      chatAPI.getLastMessages(currentUser.username)
+        .then(r => setLastMessages(r.data || {}))
+        .catch(() => {});
+    }
+  }, [currentUser.username]);
+
   // Real-time online/offline: update BOTH users list and selectedUser
   useEffect(() => {
     const unsubOn = onUserOnline((data) => {
@@ -131,12 +152,24 @@ const ChatPage = ({ currentUser, onLogout }) => {
     return () => { unsubOn(); unsubOff(); };
   }, []);
 
+  // Update lastMessages when receiving a new message (for sidebar preview on both sides)
+  useEffect(() => {
+    const unsub = onReceiveMessage((message) => {
+      if (message.receiver === currentUser.username) {
+        // Incoming message: key by sender
+        setLastMessages((prev) => ({
+          ...prev,
+          [message.sender]: { text: message.text, sender: message.sender, timestamp: message.timestamp || new Date().toISOString(), status: message.status || 'sent' }
+        }));
+      }
+    });
+    return unsub;
+  }, [currentUser.username]);
+
   // Unread count socket listeners — single source of truth from backend
   useEffect(() => {
     const u1 = onUnreadCountUpdated((d) => {
       setUnreadCounts((p) => ({ ...p, [d.senderUsername]: d.count }));
-      // Also update last message time so sidebar sorts this user to top
-      setLastMessageTimes((p) => ({ ...p, [d.senderUsername]: Date.now() }));
     });
     const u2 = onUnreadCountCleared((d) => setUnreadCounts((p) => { const u = { ...p }; delete u[d.senderUsername]; return u; }));
     return () => { u1(); u2(); };
@@ -192,7 +225,7 @@ const ChatPage = ({ currentUser, onLogout }) => {
 
       <div className={`chat-container ${isChatOpen ? 'chat-open' : ''}`}>
         <div className="sidebar-panel">
-          <Sidebar currentUser={currentUser} selectedUser={selectedUser} onSelectUser={handleSelectUser} users={users} setUsers={setUsers} unreadCounts={unreadCounts} typingUsers={typingUsers} lastMessageTimes={lastMessageTimes} />
+          <Sidebar currentUser={currentUser} selectedUser={selectedUser} onSelectUser={handleSelectUser} users={users} setUsers={setUsers} unreadCounts={unreadCounts} typingUsers={typingUsers} lastMessageTimes={lastMessageTimes} lastMessages={lastMessages} />
         </div>
         <div className="chat-panel">
           <ChatWindow currentUser={currentUser} selectedUser={selectedUser} messages={messages} setMessages={setMessages} onReply={handleReply} unreadCounts={unreadCounts} onClearUnread={handleClearUnread} onBack={handleBack} />

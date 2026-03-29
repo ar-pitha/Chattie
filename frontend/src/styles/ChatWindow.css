@@ -236,9 +236,9 @@
 
 .tick-icon { display: inline-flex; width: 16px; height: 16px; flex-shrink: 0; }
 .tick-icon svg { width: 16px; height: 16px; }
-.tick-icon.sent svg { color: var(--tick-default); }
-.tick-icon.delivered svg { color: var(--tick-default); }
-.tick-icon.seen svg { color: var(--tick-seen); }
+.message-footer .tick-icon.sent svg { fill: #B0BEC5 !important; color: #B0BEC5 !important; }
+.message-footer .tick-icon.delivered svg { fill: #B0BEC5 !important; color: #B0BEC5 !important; }
+.message-footer .tick-icon.seen svg { fill: #000000 !important; color: #000000 !important; }
 
 /* Typing dots in chat - no background, no box */
 .typing-bubble { align-self: flex-start; padding: 4px 8px; }

@@ -9,45 +9,49 @@ exports.setIO = (socketIO, users) => {
   connectedUsers = users;
 };
 
+// Get last message for each conversation a user has
+exports.getLastMessages = async (req, res) => {
+  try {
+    const { username } = req.params;
+
+    const lastMessages = await Message.aggregate([
+      // All messages involving this user
+      { $match: { $or: [{ sender: username }, { receiver: username }] } },
+      // Create a conversation key (sorted pair so A-B == B-A)
+      { $addFields: {
+        conversationWith: {
+          $cond: [{ $eq: ['$sender', username] }, '$receiver', '$sender']
+        }
+      }},
+      // Sort by newest first, then pick the first per conversation
+      { $sort: { timestamp: -1 } },
+      { $group: {
+        _id: '$conversationWith',
+        text: { $first: '$text' },
+        sender: { $first: '$sender' },
+        timestamp: { $first: '$timestamp' },
+        status: { $first: '$status' }
+      }}
+    ]);
+
+    // Convert to { username: { text, sender, timestamp, status } }
+    const result = {};
+    lastMessages.forEach(m => {
+      result[m._id] = { text: m.text, sender: m.sender, timestamp: m.timestamp, status: m.status };
+    });
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.getMessages = async (req, res) => {
   try {
     const { sender, receiver } = req.query;
 
     if (!sender || !receiver) {
       return res.status(400).json({ message: 'sender and receiver required' });
-    }
-
-    // Find all unseen messages from the other person to mark as seen
-    const unseenMessages = await Message.find({
-      sender: receiver,
-      receiver: sender,
-      status: { $in: ['sent', 'delivered'] }
-    }).select('_id');
-
-    // Bulk update to 'seen'
-    if (unseenMessages.length > 0) {
-      await Message.updateMany(
-        { _id: { $in: unseenMessages.map(m => m._id) } },
-        { $set: { status: 'seen' } }
-      );
-
-      // Notify the sender that their messages were seen (per-message status update)
-      if (io) {
-        const senderSocketId = connectedUsers?.[receiver];
-        unseenMessages.forEach(msg => {
-          const statusData = {
-            messageId: String(msg._id),
-            sender: receiver,
-            receiver: sender,
-            status: 'seen'
-          };
-          // Emit message-status-updated (what the frontend listens for)
-          if (senderSocketId) {
-            io.to(senderSocketId).emit('message-status-updated', statusData);
-          }
-          io.to(`user_${receiver}`).emit('message-status-updated', statusData);
-        });
-      }
     }
 
     // Clear unread count: "sender" (current user) is reading messages from "receiver" (other user)
