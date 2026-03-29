@@ -180,11 +180,26 @@ export const onUnreadCountCleared = (callback) => {
 
 export const onReceiveMessage = (callback) => {
   const socket = getSocket();
-  socket.on('receive_message', callback);
+  console.log(`🎧 Registering receive_message listener, socket connected: ${socket.connected}, socket ID: ${socket.id}`);
+  
+  const wrappedCallback = (message) => {
+    console.log(`📨 receive_message event received:`, {
+      from: message.sender,
+      to: message.receiver,
+      text: message.text,
+      messageId: message._id,
+      timestamp: message.timestamp,
+      media: message.media
+    });
+    callback(message);
+  };
+  
+  socket.on('receive_message', wrappedCallback);
   
   // Return unsubscribe function
   return () => {
-    socket.off('receive_message', callback);
+    console.log(`🎧 Unregistering receive_message listener`);
+    socket.off('receive_message', wrappedCallback);
   };
 };
 

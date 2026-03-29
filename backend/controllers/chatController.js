@@ -154,12 +154,28 @@ exports.saveMessage = async (req, res) => {
     // Use both room-based AND direct socket delivery for robustness in deployment
     // (Render free tier can drop rooms after sleep/wake cycles)
     if (io) {
+      console.log(`📡 Emitting receive_message to ${receiver}:`, {
+        sender,
+        receiver,
+        messageId: messageObject._id,
+        text: messageObject.text,
+        timestamp: messageObject.timestamp,
+        roomName: `user_${receiver}`,
+        io_available: !!io,
+        connectedUsers: connectedUsers ? Object.keys(connectedUsers) : [],
+        receiverSocketId: connectedUsers?.[receiver] || 'NOT_FOUND'
+      });
       io.to(`user_${receiver}`).emit('receive_message', messageObject);
       // Direct socket fallback in case room membership was lost
       const receiverSocketId = connectedUsers?.[receiver];
       if (receiverSocketId) {
+        console.log(`✅ Sent to receiver socket ID: ${receiverSocketId}`);
         io.to(receiverSocketId).emit('receive_message', messageObject);
+      } else {
+        console.warn(`⚠️ Receiver ${receiver} not found in connectedUsers. Sent to room only.`);
       }
+    } else {
+      console.error(`❌ Socket.IO (io) is null! Cannot emit message.`);
     }
 
     res.status(201).json({ message: 'Message saved successfully', data: messageObject });

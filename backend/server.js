@@ -98,6 +98,9 @@ io.on('connection', (socket) => {
     const { username } = data;
     connectedUsers[username] = socket.id;
     socket.join(`user_${username}`);
+    console.log(`👤 User joined: ${username} (socket ID: ${socket.id})`);
+    console.log(`📋 Connected users:`, Object.keys(connectedUsers));
+    console.log(`🏠 Socket joined room: user_${username}`);
 
     // Mark online in DB
     const User = require('./models/User');

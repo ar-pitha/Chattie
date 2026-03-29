@@ -34,6 +34,13 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
     e.preventDefault();
     if (!text.trim()) return;
 
+    console.log(`
+📤 Sending message:`, {
+      from: currentUser.username,
+      to: selectedUser.username,
+      text: text.trim()
+    });
+
     setLoading(true);
     const messageText = text.trim();
     const replyData = replyingTo ? {
@@ -51,6 +58,11 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
     try {
       const saveResponse = await chatAPI.saveMessage(currentUser.username, selectedUser.username, messageText, replyData);
       const savedMessage = saveResponse.data?.data;
+
+      console.log(`✅ Message sent, backend response:`, {
+        savedMessage,
+        hasId: !!savedMessage?._id
+      });
 
       const messageForState = savedMessage || {
         sender: currentUser.username,

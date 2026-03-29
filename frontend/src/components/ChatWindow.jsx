@@ -113,12 +113,24 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
   }, [selectedUser?.username, currentUser.username, currentUser._id]);
 
   useEffect(() => {
+    console.log(`🎧 [ChatWindow] Setting up receive_message listener for ${selectedUser?.username}`);
     const unsubscribe = onReceiveMessage((message) => {
+      console.log(`💬 ChatWindow received message:`, {
+        from: message.sender,
+        to: message.receiver,
+        text: message.text,
+        selectedUserUsername: selectedUser?.username,
+        currentUserUsername: currentUser.username
+      });
+      
       const isForConvo = selectedUser &&
         ((message.sender === currentUser.username && message.receiver === selectedUser.username) ||
          (message.sender === selectedUser.username && message.receiver === currentUser.username));
 
+      console.log(`📍 Is message for current conversation? ${isForConvo}`);
+
       if (isForConvo) {
+        console.log(`✅ Adding message to current conversation`);
         emitMessageDelivered(message._id, currentUser.username, message.sender);
         emitMessageSeen(message._id, currentUser.username, message.sender);
         // Backend increments unread in saveMessage, but we're viewing this chat,
@@ -127,7 +139,12 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
         onClearUnread?.(message.sender);
         setMessages((prev) => {
           const dup = prev.some(m => m.sender === message.sender && m.receiver === message.receiver && m.text === message.text && Math.abs(new Date(m.timestamp) - new Date(message.timestamp)) < 2000);
-          return dup ? prev : [...prev, message];
+          if (dup) {
+            console.log(`⚠️ Duplicate message detected, skipping`);
+            return prev;
+          }
+          console.log(`🆕 Adding new message to state`);
+          return [...prev, message];
         });
       } else if (message.receiver === currentUser.username) {
         // Message is for me but I'm on a different chat (or home screen)
@@ -137,8 +154,11 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
         // No local increment here — avoids double-counting.
       }
     });
-    return unsubscribe;
-  }, [selectedUser, currentUser.username, currentUser._id, setMessages, onClearUnread]);
+    return () => {
+      console.log(`🎧 [ChatWindow] Unsubscribing from receive_message listener for ${selectedUser?.username}`);
+      unsubscribe();
+    };
+  }, [selectedUser?.username, currentUser.username]);
 
   useEffect(() => { return onDeleteMessage((d) => setMessages((p) => p.filter((m) => m._id !== d.messageId))); }, [setMessages]);
   useEffect(() => { return onDeleteMessageForMe((d) => setMessages((p) => p.map((m) => m._id === d.messageId && d.username !== currentUser.username ? { ...m, text: '[Deleted message]', deletedForMe: true } : m))); }, [setMessages, currentUser.username]);
