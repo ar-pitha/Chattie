@@ -62,7 +62,11 @@ export const chatAPI = {
     axios.delete(`${API_BASE_URL}/chat/messages/${messageId}`),
 
   deleteMessageForMe: (messageId, username) =>
-    axios.post(`${API_BASE_URL}/chat/messages/delete-for-me`, { messageId, username })
+    axios.post(`${API_BASE_URL}/chat/messages/delete-for-me`, { messageId, username }),
+
+  // Debug: Check message structure and media fields
+  debugMessagesWithMedia: (sender, receiver) =>
+    axios.get(`${API_BASE_URL}/chat/debug/messages`, { params: { sender, receiver } })
 };
 
 export const mediaAPI = {

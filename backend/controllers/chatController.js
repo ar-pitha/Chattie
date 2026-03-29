@@ -200,3 +200,67 @@ exports.deleteMessageForMe = async (req, res) => {
     res.status(500).json({ message: 'Error deleting message', error: error.message });
   }
 };
+
+// DEBUG: Check media messages for a conversation
+exports.debugMessagesWithMedia = async (req, res) => {
+  try {
+    const { sender, receiver } = req.query;
+
+    if (!sender || !receiver) {
+      return res.status(400).json({ message: 'sender and receiver required' });
+    }
+
+    console.log(`🔍 Debug: Fetching messages between ${sender} and ${receiver}`);
+
+    // Get all messages between two users
+    const allMessages = await Message.find({
+      $or: [
+        { sender, receiver },
+        { sender: receiver, receiver: sender }
+      ]
+    }).sort({ timestamp: 1 }).lean();
+
+    console.log(`📊 Total messages found: ${allMessages.length}`);
+
+    // Separate messages with and without media
+    const messagesWithMedia = allMessages.filter(m => m.media && m.media.fileId);
+    const messagesWithoutMedia = allMessages.filter(m => !m.media || !m.media.fileId);
+
+    console.log(`✅ Messages with media field: ${messagesWithMedia.length}`);
+    console.log(`❌ Messages without media field: ${messagesWithoutMedia.length}`);
+
+    // Show sample messages of each type
+    const sampleWithMedia = messagesWithMedia.slice(0, 2).map(m => ({
+      _id: m._id,
+      text: m.text,
+      media: m.media,
+      timestamp: m.timestamp
+    }));
+
+    const sampleWithoutMedia = messagesWithoutMedia.slice(0, 2).map(m => ({
+      _id: m._id,
+      text: m.text,
+      media: m.media,
+      timestamp: m.timestamp
+    }));
+
+    res.json({
+      summary: {
+        total: allMessages.length,
+        withMedia: messagesWithMedia.length,
+        withoutMedia: messagesWithoutMedia.length
+      },
+      sampleWithMedia,
+      sampleWithoutMedia,
+      mediaDetails: messagesWithMedia.map(m => ({
+        fileName: m.media?.fileName,
+        fileId: m.media?.fileId,
+        mediaType: m.media?.mediaType,
+        mimeType: m.media?.mimeType
+      }))
+    });
+  } catch (error) {
+    console.error('Debug error:', error);
+    res.status(500).json({ message: 'Debug error', error: error.message });
+  }
+};

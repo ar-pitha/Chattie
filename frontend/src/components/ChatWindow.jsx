@@ -178,6 +178,20 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
     setLoading(true);
     try {
       const response = await chatAPI.getMessages(currentUser.username, selectedUser.username);
+      
+      // Debug log to check media field structure
+      const messagesWithMedia = response.data.filter(m => m.media && m.media.fileId);
+      const messagesWithoutMedia = response.data.filter(m => !m.media || !m.media.fileId);
+      
+      console.log(`📊 Messages fetched - Total: ${response.data.length}, With Media: ${messagesWithMedia.length}, Without: ${messagesWithoutMedia.length}`);
+      
+      if (messagesWithMedia.length > 0) {
+        console.log('✅ Sample media message:', messagesWithMedia[0]);
+      }
+      if (messagesWithoutMedia.length > 0 && response.data[0]) {
+        console.log('📝 Sample text message:', messagesWithoutMedia[0]);
+      }
+      
       setMessages(response.data);
 
       // Mark unseen messages from the other user as 'seen' via socket
@@ -327,9 +341,21 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
                 const msg = item.data;
                 const isSent = msg.sender === currentUser.username;
                 
+                // Debug logging
+                if (msg.media) {
+                  console.log('✅ Message HAS media field:', {
+                    id: msg._id,
+                    mediaType: msg.media.mediaType,
+                    fileName: msg.media.fileName,
+                    fileId: msg.media.fileId
+                  });
+                } else if (msg.text && msg.text.includes('📎')) {
+                  console.warn('⚠️ Message text has attachment emoji but no media field:', msg.text, msg);
+                }
+                
                 return (
                   <div key={item.key} className={`message ${isSent ? 'sent' : 'received'} ${msg.deletedForMe ? 'deleted' : ''}`} onClick={() => setActiveMessageId(activeMessageId === msg._id ? null : msg._id)}>
-                    {msg.media ? (
+                    {msg.media && msg.media.fileId ? (
                       <>
                         <MediaMessage message={msg} isOwn={isSent} />
                         <div className="message-footer" style={{ paddingLeft: '12px', marginTop: '4px' }}>

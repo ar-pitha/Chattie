@@ -185,14 +185,18 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       try {
         await message.save();
 
+        console.log(`✅ Media message saved:`);
+        console.log(`   Type: ${mediaType}, File: ${file.originalname}`);
+        console.log(`   FileID: ${fileId}, Type: ${typeof fileId}`);
+        console.log(`   Message ID: ${message._id}`);
+        console.log(`   Media field in DB:`, message.media);
+
         // Always increment receiver's unread count for this sender
         const updatedUser = await User.findOneAndUpdate(
           { username: receiver },
           { $inc: { [`unreadCounts.${sender}`]: 1 } },
           { new: true }
         );
-
-        console.log(`✅ Media saved to MongoDB: ${mediaType} - ${file.originalname} (${(file.size / 1024).toFixed(2)} KB) with fileId: ${fileId}`);
 
         // Notify receiver's frontend of the new unread count via socket
         if (io && updatedUser) {
@@ -264,6 +268,8 @@ router.get('/download/:fileId', async (req, res) => {
   try {
     const fileId = req.params.fileId;
 
+    console.log(`📥 Download request for fileId: ${fileId}`);
+
     // Validate fileId format
     if (!fileId.match(/^[0-9a-fA-F]{24}$/)) {
       console.error(`❌ Invalid file ID format: ${fileId}`);
@@ -283,12 +289,12 @@ router.get('/download/:fileId', async (req, res) => {
     }).toArray();
 
     if (!files || files.length === 0) {
-      console.error(`❌ File not found: ${fileId}`);
+      console.error(`❌ File not found in GridFS: ${fileId}`);
       return res.status(404).json({ message: 'File not found' });
     }
 
     const file = files[0];
-    console.log(`📥 Downloading file: ${file.filename} (${file.length} bytes)`);
+    console.log(`✅ File found: ${file.filename} (${file.length} bytes)`);
 
     // Set proper headers for streaming media
     res.setHeader('Content-Type', file.metadata?.mimeType || 'application/octet-stream');
