@@ -5,9 +5,11 @@ import '../styles/Settings.css';
 const Settings = ({ currentUsername, isOpen, onClose, hasAppLock, onAppLockChange }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [disablePassword, setDisablePassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showDisableConfirm, setShowDisableConfirm] = useState(false);
 
   if (!isOpen) return null;
 
@@ -33,20 +35,45 @@ const Settings = ({ currentUsername, isOpen, onClose, hasAppLock, onAppLockChang
     }
   };
 
-  const handleDisableAppLock = async () => {
+  const handleDisableClick = () => {
+    setShowDisableConfirm(true);
+    setDisablePassword('');
+    setError('');
+  };
+
+  const handleConfirmDisable = async () => {
+    if (!disablePassword) {
+      setError('Password is required');
+      return;
+    }
+
     setLoading(true);
     setError('');
     setSuccess('');
     try {
+      // Verify password before disabling
+      await authAPI.verifyAppLockPassword(currentUsername, disablePassword);
+      
+      // Password verified, now disable app lock
       await authAPI.toggleAppLock(currentUsername, false);
       setSuccess('App lock disabled');
       onAppLockChange?.(false);
-      setTimeout(() => onClose(), 1000);
+      setTimeout(() => {
+        setDisablePassword('');
+        setShowDisableConfirm(false);
+        onClose();
+      }, 1500);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to disable app lock');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCancelDisable = () => {
+    setShowDisableConfirm(false);
+    setDisablePassword('');
+    setError('');
   };
 
   return (
@@ -74,9 +101,44 @@ const Settings = ({ currentUsername, isOpen, onClose, hasAppLock, onAppLockChang
               <div className="app-lock-status active">
                 <p className="status-text">App lock is enabled</p>
                 <p className="settings-description">Your chat is protected with a password.</p>
-                <button type="button" disabled={loading} className="disable-btn" onClick={handleDisableAppLock}>
-                  {loading ? 'Disabling...' : 'Disable App Lock'}
-                </button>
+                
+                {!showDisableConfirm ? (
+                  <button type="button" disabled={loading} className="disable-btn" onClick={handleDisableClick}>
+                    {loading ? 'Disabling...' : 'Disable App Lock'}
+                  </button>
+                ) : (
+                  <div className="disable-confirm-form">
+                    <p className="confirm-text">Enter your app lock password to disable:</p>
+                    <div className="form-group">
+                      <input
+                        type="password"
+                        placeholder="Enter app lock password"
+                        value={disablePassword}
+                        onChange={(e) => { setDisablePassword(e.target.value); setError(''); }}
+                        disabled={loading}
+                      />
+                    </div>
+                    {error && <div className="error-message">{error}</div>}
+                    <div className="button-group">
+                      <button
+                        type="button"
+                        className="cancel-btn"
+                        onClick={handleCancelDisable}
+                        disabled={loading}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="confirm-btn"
+                        onClick={handleConfirmDisable}
+                        disabled={loading}
+                      >
+                        {loading ? 'Verifying...' : 'Disable'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="app-lock-status inactive">
@@ -87,21 +149,23 @@ const Settings = ({ currentUsername, isOpen, onClose, hasAppLock, onAppLockChang
 
             <div className="divider"></div>
 
-            <form onSubmit={handleSetAppLock} className="settings-form">
-              <div className="form-group">
-                <label htmlFor="password">Password</label>
-                <input id="password" type="password" placeholder="Enter password" value={password} onChange={(e) => { setPassword(e.target.value); setError(''); }} disabled={loading} required />
-              </div>
-              <div className="form-group">
-                <label htmlFor="confirmPassword">Confirm Password</label>
-                <input id="confirmPassword" type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }} disabled={loading} required />
-              </div>
-              {error && <div className="error-message">{error}</div>}
-              {success && <div className="success-message">{success}</div>}
-              <button type="submit" disabled={loading} className="submit-btn">
-                {loading ? 'Setting...' : 'Set App Lock Password'}
-              </button>
-            </form>
+            {!hasAppLock && (
+              <form onSubmit={handleSetAppLock} className="settings-form">
+                <div className="form-group">
+                  <label htmlFor="password">Password</label>
+                  <input id="password" type="password" placeholder="Enter password" value={password} onChange={(e) => { setPassword(e.target.value); setError(''); }} disabled={loading} required />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="confirmPassword">Confirm Password</label>
+                  <input id="confirmPassword" type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }} disabled={loading} required />
+                </div>
+                {error && <div className="error-message">{error}</div>}
+                {success && <div className="success-message">{success}</div>}
+                <button type="submit" disabled={loading} className="submit-btn">
+                  {loading ? 'Setting...' : 'Set App Lock Password'}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </div>

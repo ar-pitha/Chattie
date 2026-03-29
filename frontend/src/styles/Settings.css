@@ -243,3 +243,78 @@
   background: var(--border-light);
   margin: 16px 0;
 }
+
+/* Disable Confirmation Form */
+.disable-confirm-form {
+  padding: 14px;
+  background: rgba(234, 0, 56, 0.06);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  animation: slideDown 200ms ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.confirm-text {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.button-group {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cancel-btn,
+.confirm-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition), transform 80ms ease;
+}
+
+.cancel-btn {
+  background: var(--bg-sidebar);
+  color: var(--text-primary);
+  border: 1px solid var(--border-input);
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.confirm-btn {
+  background: var(--color-danger);
+  color: white;
+}
+
+.confirm-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.cancel-btn:disabled,
+.confirm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancel-btn:active:not(:disabled),
+.confirm-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
