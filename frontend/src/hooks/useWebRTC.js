@@ -36,7 +36,7 @@ export const useWebRTC = (currentUser, remoteUser) => {
   const [incomingCaller, setIncomingCaller] = useState(null);
   const [callDuration, setCallDuration] = useState(0); // in seconds
   const [isMuted, setIsMuted] = useState(false);
-  const [speakerEnabled, setSpeakerEnabled] = useState(true);
+  const [speakerEnabled, setSpeakerEnabled] = useState(false); // Speaker off by default (earpiece mode)
   const [networkQuality, setNetworkQuality] = useState('good'); // excellent, good, fair, poor
   const [networkWarning, setNetworkWarning] = useState(null);
 
@@ -53,7 +53,10 @@ export const useWebRTC = (currentUser, remoteUser) => {
   const statsIntervalRef = useRef(null);
   const networkWarningTimeoutRef = useRef(null);
 
-  // Attach remote stream to audio element and play
+  // Attach remote stream to audio element and play (reads speakerEnabled via ref to avoid stale closures)
+  const speakerEnabledRef = useRef(speakerEnabled);
+  speakerEnabledRef.current = speakerEnabled;
+
   const attachRemoteAudio = useCallback(() => {
     const audioEl = remoteAudioRef.current;
     const stream = remoteStreamRef.current;
@@ -63,8 +66,10 @@ export const useWebRTC = (currentUser, remoteUser) => {
       console.log('🔊 Attaching remote stream to audio element');
       audioEl.srcObject = stream;
     }
+
+    // Respect speaker toggle state (off = earpiece volume, on = loudspeaker volume)
     audioEl.muted = false;
-    audioEl.volume = 1.0;
+    audioEl.volume = speakerEnabledRef.current ? 1.0 : 0.3;
 
     if (audioEl.paused) {
       const playPromise = audioEl.play();
@@ -89,12 +94,16 @@ export const useWebRTC = (currentUser, remoteUser) => {
     }
   }, []);
 
-  // Re-attach remote audio after React re-renders (ensures audio survives state changes)
+  // Attach remote audio when call becomes connected (runs once, not on every re-render)
+  const hasAttachedAudioRef = useRef(false);
   useEffect(() => {
-    if (callStatus === 'connected' && remoteStreamRef.current) {
-      // Small delay to ensure DOM is settled after re-render
+    if (callStatus === 'connected' && remoteStreamRef.current && !hasAttachedAudioRef.current) {
+      hasAttachedAudioRef.current = true;
       const timer = setTimeout(() => attachRemoteAudio(), 50);
       return () => clearTimeout(timer);
+    }
+    if (!callStatus || callStatus === 'ended') {
+      hasAttachedAudioRef.current = false;
     }
   }, [callStatus, attachRemoteAudio]);
 
@@ -464,14 +473,14 @@ export const useWebRTC = (currentUser, remoteUser) => {
     }
   }, [isMuted]);
 
-  // Toggle speaker
+  // Toggle speaker (off = earpiece/normal volume, on = loudspeaker/full volume)
   const toggleSpeaker = useCallback(() => {
     if (remoteAudioRef.current) {
       const newSpeakerState = !speakerEnabled;
-      remoteAudioRef.current.muted = !newSpeakerState;
-      remoteAudioRef.current.volume = newSpeakerState ? 1.0 : 0;
+      remoteAudioRef.current.muted = false; // Never mute — speaker toggle controls volume only
+      remoteAudioRef.current.volume = newSpeakerState ? 1.0 : 0.3;
       setSpeakerEnabled(newSpeakerState);
-      console.log(`🔊 Speaker ${newSpeakerState ? 'on' : 'off'}`);
+      console.log(`🔊 Speaker ${newSpeakerState ? 'ON (loudspeaker)' : 'OFF (earpiece)'}`);
     }
   }, [speakerEnabled]);
 
@@ -608,6 +617,7 @@ export const useWebRTC = (currentUser, remoteUser) => {
     callStartTimeRef.current = null;
     callRemoteUserRef.current = null; // Reset captured remote user
     remoteStreamRef.current = null; // Reset remote stream
+    hasAttachedAudioRef.current = false;
 
     // Close peer connection
     if (peerConnectionRef.current) {
