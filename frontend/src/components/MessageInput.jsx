@@ -2,16 +2,20 @@ import React, { useState, useRef, useEffect } from 'react';
 import { chatAPI, notificationAPI, mediaAPI } from '../utils/api';
 import { emitTyping, emitStopTyping } from '../utils/socket';
 import ReplyPreview from './ReplyPreview';
-import MediaActions from './MediaActions';
+import MediaActions, { MediaPopup } from './MediaActions';
 import '../styles/MessageInput.css';
 
-const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, onReplyCancel }) => {
+const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, onReplyCancel, onMediaMenuToggle }) => {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [mediaMenuOpen, setMediaMenuOpen] = useState(false);
   const typingTimeoutRef = React.useRef(null);
   const inputRef = useRef(null);
+  const photoRef = useRef(null);
+  const videoRef = useRef(null);
+  const docRef = useRef(null);
 
   // Auto-focus input when chat opens or selected user changes
   useEffect(() => {
@@ -141,11 +145,23 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
     }
   };
 
+  const handleMenuToggle = (open) => {
+    setMediaMenuOpen(open);
+    onMediaMenuToggle?.(open);
+  };
+
   return (
     <div className="message-input-wrapper">
       {replyingTo && (
         <ReplyPreview replyTo={replyingTo} onCancel={onReplyCancel} />
       )}
+      <MediaPopup
+        show={mediaMenuOpen}
+        onPhotoClick={() => photoRef.current?.click()}
+        onVideoClick={() => videoRef.current?.click()}
+        onDocumentClick={() => docRef.current?.click()}
+        isLoading={loading}
+      />
       {uploadProgress !== null && (
         <div className="upload-progress">
           <div className="progress-bar" style={{ width: `${uploadProgress}%` }}></div>
@@ -153,27 +169,34 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
         </div>
       )}
       <form className="message-input" onSubmit={handleSendMessage}>
-        <MediaActions
-          onPhotoSelect={(file) => handleMediaUpload(file, 'photo')}
-          onVideoSelect={(file) => handleMediaUpload(file, 'video')}
-          onDocumentSelect={(file) => handleMediaUpload(file, 'document')}
-          isLoading={loading}
-        />
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="Type a message"
-          value={text}
-          onChange={(e) => { setText(e.target.value); handleTyping(); }}
-          disabled={loading}
-          autoComplete="off"
-        />
+        <div className="input-container">
+          <MediaActions
+            onPhotoSelect={(file) => handleMediaUpload(file, 'photo')}
+            onVideoSelect={(file) => handleMediaUpload(file, 'video')}
+            onDocumentSelect={(file) => handleMediaUpload(file, 'document')}
+            isLoading={loading}
+            onMenuToggle={handleMenuToggle}
+          />
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Type a message"
+            value={text}
+            onChange={(e) => { setText(e.target.value); handleTyping(); }}
+            disabled={loading}
+            autoComplete="off"
+          />
+        </div>
         <button type="submit" className="send-btn" disabled={loading || !text.trim()} aria-label="Send message">
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22">
+            <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" fill="#ffffff"/>
           </svg>
         </button>
       </form>
+      {/* Hidden file inputs triggered by MediaPopup */}
+      <input ref={photoRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={(e) => { if (e.target.files?.[0]) { handleMediaUpload(e.target.files[0], 'photo'); setMediaMenuOpen(false); } e.target.value = ''; }} style={{ display: 'none' }} />
+      <input ref={videoRef} type="file" accept="video/mp4,video/quicktime,video/webm,video/x-msvideo" onChange={(e) => { if (e.target.files?.[0]) { handleMediaUpload(e.target.files[0], 'video'); setMediaMenuOpen(false); } e.target.value = ''; }} style={{ display: 'none' }} />
+      <input ref={docRef} type="file" accept=".pdf,.doc,.docx,.txt" onChange={(e) => { if (e.target.files?.[0]) { handleMediaUpload(e.target.files[0], 'document'); setMediaMenuOpen(false); } e.target.value = ''; }} style={{ display: 'none' }} />
     </div>
   );
 };

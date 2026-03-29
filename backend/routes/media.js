@@ -15,50 +15,57 @@ let connectedUsers = null;
 let gfs = null;
 let isGridFSReady = false;
 
-// Initialize GridFS Bucket when database is connected
+// Initialize GridFS Bucket using Mongoose's own database reference
+// This guarantees GridFS uses the exact same database as Message model
 const initGridFS = () => {
   try {
-    const connection = mongoose.connection;
-    
-    // Get database name from env or extract from URI
-    let dbName = process.env.MONGODB_DB;
-    if (!dbName) {
-      // Extract from MONGODB_URI: mongodb+srv://user:pass@host/dbname
-      const uri = process.env.MONGODB_URI;
-      const match = uri?.match(/\/([a-zA-Z0-9_-]+)(\?|$)/);
-      dbName = match ? match[1] : 'test';
+    const db = mongoose.connection.db;
+    if (!db) {
+      console.error('❌ mongoose.connection.db not ready, retrying...');
+      setTimeout(initGridFS, 2000);
+      return;
     }
-    
-    console.log(`📍 Initializing GridFS for database: ${dbName}`);
-    
-    const db = connection.getClient().db(dbName);
-    
-    gfs = new GridFSBucket(db, {
-      bucketName: 'media'
-    });
+
+    gfs = new GridFSBucket(db, { bucketName: 'media' });
     isGridFSReady = true;
-    console.log(`✅ GridFS initialized for media storage in database: ${dbName}`);
+    console.log(`✅ GridFS initialized for database: ${db.databaseName}`);
   } catch (error) {
     console.error('❌ Failed to initialize GridFS:', error.message);
-    // Retry after 5 seconds
-    setTimeout(initGridFS, 5000);
+    setTimeout(initGridFS, 2000);
   }
 };
 
-// Ensure GridFS is initialized when connection is ready
+// Initialize on connection open (handles cold starts and reconnections)
 if (mongoose.connection.readyState === 1) {
   initGridFS();
-} else {
-  mongoose.connection.once('open', () => {
-    console.log('📡 MongoDB connected, initializing GridFS...');
-    initGridFS();
-  });
 }
+mongoose.connection.on('open', () => {
+  console.log('📡 MongoDB connected, initializing GridFS...');
+  initGridFS();
+});
+mongoose.connection.on('reconnected', () => {
+  console.log('🔄 MongoDB reconnected, re-initializing GridFS...');
+  initGridFS();
+});
 
 // Export function to set io and connectedUsers
 router.setIO = (socketIO, users) => {
   io = socketIO;
   connectedUsers = users;
+};
+
+// Wait for GridFS to become ready (handles Render cold starts)
+const waitForGridFS = (timeoutMs = 10000) => {
+  return new Promise((resolve) => {
+    if (gfs && isGridFSReady) return resolve(true);
+    const start = Date.now();
+    const check = () => {
+      if (gfs && isGridFSReady) return resolve(true);
+      if (Date.now() - start > timeoutMs) return resolve(false);
+      setTimeout(check, 500);
+    };
+    check();
+  });
 };
 
 // File type configurations
@@ -140,11 +147,12 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       });
     }
 
-    // Ensure GridFS is initialized
-    if (!gfs || !isGridFSReady) {
-      console.error('❌ GridFS not ready for upload. Connection state:', mongoose.connection.readyState);
-      return res.status(503).json({ 
-        message: 'File storage system not ready. Please try again in a moment.' 
+    // Wait for GridFS to be ready (handles Render cold starts)
+    const ready = await waitForGridFS();
+    if (!ready) {
+      console.error('❌ GridFS not ready for upload after timeout. Connection state:', mongoose.connection.readyState);
+      return res.status(503).json({
+        message: 'File storage system not ready. Please try again in a moment.'
       });
     }
 
@@ -276,10 +284,12 @@ router.get('/download/:fileId', async (req, res) => {
       return res.status(400).json({ message: 'Invalid file ID' });
     }
 
-    if (!gfs || !isGridFSReady) {
-      console.error('❌ GridFS bucket not initialized');
-      return res.status(503).json({ 
-        message: 'File storage system not ready' 
+    // Wait for GridFS to be ready (handles Render cold starts)
+    const ready = await waitForGridFS();
+    if (!ready) {
+      console.error('❌ GridFS not ready for download after timeout');
+      return res.status(503).json({
+        message: 'File storage system not ready'
       });
     }
 

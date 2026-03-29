@@ -58,7 +58,7 @@ const DoubleTick = () => (
   </svg>
 );
 
-const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply, unreadCounts, onClearUnread, onBack }) => {
+const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply, unreadCounts, onClearUnread, onBack, scrollTrigger }) => {
   const [loading, setLoading] = useState(false);
   const [activeMessageId, setActiveMessageId] = useState(null);
   const [showCallHistory, setShowCallHistory] = useState(false);
@@ -92,6 +92,12 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
+
+  // Scroll to bottom when media menu opens
+  useEffect(() => {
+    if (scrollTrigger) scrollToBottom();
+  }, [scrollTrigger, scrollToBottom]);
+
 
   useEffect(() => {
     const unsubscribe = onMessageStatusUpdated((data) => {

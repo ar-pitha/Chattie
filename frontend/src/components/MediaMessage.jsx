@@ -1,24 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 const MediaMessage = ({ message, isOwn }) => {
   if (!message.media) return null;
 
   const [isDownloading, setIsDownloading] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const retryTimerRef = useRef(null);
   const { mediaType, fileId, fileName, fileSizeKB, mimeType } = message.media;
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-  
-  // Construct download URL using fileId (from GridFS)
-  const fullMediaUrl = `${apiBaseUrl}/media/download/${fileId}`;
+
+  // Construct download URL using fileId — append retry param to bust cache on retry
+  const fullMediaUrl = `${apiBaseUrl}/media/download/${fileId}${retryCount ? `?r=${retryCount}` : ''}`;
 
   useEffect(() => {
-    console.log('📦 MediaMessage rendered:', {
-      mediaType,
-      fileId,
-      fileName,
-      apiBaseUrl,
-      fullMediaUrl
-    });
-  }, [mediaType, fileId, fileName, apiBaseUrl, fullMediaUrl]);
+    return () => { if (retryTimerRef.current) clearTimeout(retryTimerRef.current); };
+  }, []);
+
+  // Auto-retry failed media loads (handles Render cold start where GridFS isn't ready yet)
+  const handleMediaError = (e) => {
+    if (retryCount < 3) {
+      retryTimerRef.current = setTimeout(() => setRetryCount((c) => c + 1), 2000);
+    } else if (e?.target?.tagName === 'IMG') {
+      e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"%3E%3Crect fill="%23f0f0f0" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dy=".3em" text-anchor="middle" fill="%23999" font-size="16"%3EImage not found%3C/text%3E%3C/svg%3E';
+    }
+  };
 
   const formatFileSize = (kb) => {
     if (kb < 1024) return `${kb} KB`;
@@ -79,11 +84,7 @@ const MediaMessage = ({ message, isOwn }) => {
               src={fullMediaUrl}
               alt="Photo"
               className="photo-preview"
-              onLoad={() => console.log('✅ Photo loaded:', fullMediaUrl)}
-              onError={(e) => {
-                console.error('❌ Photo failed to load:', fullMediaUrl);
-                e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"%3E%3Crect fill="%23f0f0f0" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dy=".3em" text-anchor="middle" fill="%23999" font-size="16"%3EImage not found%3C/text%3E%3C/svg%3E';
-              }}
+              onError={handleMediaError}
             />
             <button 
               className="media-download-btn"
@@ -111,6 +112,7 @@ const MediaMessage = ({ message, isOwn }) => {
               controls
               className="video-preview"
               preload="metadata"
+              onError={handleMediaError}
             >
               <source src={fullMediaUrl} type={mimeType} />
               Your browser does not support the video tag.

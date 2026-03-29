@@ -5,7 +5,7 @@ import MessageInput from '../components/MessageInput';
 import AppLockModal from '../components/AppLockModal';
 import Settings from '../components/Settings';
 import { authAPI, usersAPI, chatAPI } from '../utils/api';
-import { disconnectSocket, emitUserLogout, initializeSocket, emitUserJoin, onUnreadCountUpdated, onUnreadCountCleared, emitClearUnreadCount, onUserOnline, onUserOffline, onTypingIndicator, onStopTyping, emitUserAway, emitUserBack, onReceiveMessage } from '../utils/socket';
+import { disconnectSocket, emitUserLogout, initializeSocket, emitUserJoin, onUnreadCountUpdated, onUnreadCountCleared, emitClearUnreadCount, onUserOnline, onUserOffline, onTypingIndicator, onStopTyping, emitUserAway, emitUserBack, onReceiveMessage, onSocketConnect } from '../utils/socket';
 import { setupForegroundNotifications, requestFCMToken, registerServiceWorker } from '../utils/firebase';
 import { useAppSecurity, setAppLockSession, wasAppLocked } from '../utils/security';
 import '../styles/ChatPage.css';
@@ -24,6 +24,7 @@ const ChatPage = ({ currentUser, onLogout }) => {
   // Track last message per user for sidebar display and sorting
   // { username: { text, sender, timestamp, status } }
   const [lastMessages, setLastMessages] = useState({});
+  const [scrollTrigger, setScrollTrigger] = useState(0);
   // Keep lastMessageTimes derived from lastMessages for sorting
   const lastMessageTimes = React.useMemo(() => {
     const times = {};
@@ -122,22 +123,30 @@ const ChatPage = ({ currentUser, onLogout }) => {
     initFCM();
   }, [currentUser._id, currentUser.username]);
 
-  useEffect(() => {
-    if (currentUser._id) {
-      usersAPI.getUnreadCounts(currentUser._id)
-        .then(r => setUnreadCounts(r.data.unreadCounts || {}))
-        .catch(() => {});
-    }
-  }, [currentUser._id]);
-
-  // Fetch last messages for sidebar display
-  useEffect(() => {
+  // Fetch last messages and unread counts — also re-fetch on socket reconnect
+  // (handles Render cold start where initial API call fails while backend wakes up)
+  const fetchSidebarData = useCallback(() => {
     if (currentUser.username) {
       chatAPI.getLastMessages(currentUser.username)
         .then(r => setLastMessages(r.data || {}))
         .catch(() => {});
     }
-  }, [currentUser.username]);
+    if (currentUser._id) {
+      usersAPI.getUnreadCounts(currentUser._id)
+        .then(r => setUnreadCounts(r.data.unreadCounts || {}))
+        .catch(() => {});
+    }
+  }, [currentUser.username, currentUser._id]);
+
+  useEffect(() => {
+    fetchSidebarData();
+  }, [fetchSidebarData]);
+
+  useEffect(() => {
+    return onSocketConnect(() => {
+      fetchSidebarData();
+    });
+  }, [fetchSidebarData]);
 
   // Real-time online/offline: update BOTH users list and selectedUser
   useEffect(() => {
@@ -228,9 +237,9 @@ const ChatPage = ({ currentUser, onLogout }) => {
           <Sidebar currentUser={currentUser} selectedUser={selectedUser} onSelectUser={handleSelectUser} users={users} setUsers={setUsers} unreadCounts={unreadCounts} typingUsers={typingUsers} lastMessageTimes={lastMessageTimes} lastMessages={lastMessages} />
         </div>
         <div className="chat-panel">
-          <ChatWindow currentUser={currentUser} selectedUser={selectedUser} messages={messages} setMessages={setMessages} onReply={handleReply} unreadCounts={unreadCounts} onClearUnread={handleClearUnread} onBack={handleBack} />
+          <ChatWindow currentUser={currentUser} selectedUser={selectedUser} messages={messages} setMessages={setMessages} onReply={handleReply} unreadCounts={unreadCounts} onClearUnread={handleClearUnread} onBack={handleBack} scrollTrigger={scrollTrigger} />
           {selectedUser && (
-            <MessageInput currentUser={currentUser} selectedUser={selectedUser} onMessageSent={handleMessageSent} replyingTo={replyingTo} onReplyCancel={() => setReplyingTo(null)} />
+            <MessageInput currentUser={currentUser} selectedUser={selectedUser} onMessageSent={handleMessageSent} replyingTo={replyingTo} onReplyCancel={() => setReplyingTo(null)} onMediaMenuToggle={(open) => { if (open) setScrollTrigger(s => s + 1); }} />
           )}
         </div>
       </div>

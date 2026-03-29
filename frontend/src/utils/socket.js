@@ -52,6 +52,12 @@ export const getSocket = () => {
   return socket;
 };
 
+export const onSocketConnect = (callback) => {
+  const socket = getSocket();
+  socket.on('connect', callback);
+  return () => socket.off('connect', callback);
+};
+
 export const emitUserJoin = (username) => {
   currentUsername = username; // Store for reconnection
   const socket = getSocket();
