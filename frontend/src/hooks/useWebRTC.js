@@ -46,11 +46,57 @@ export const useWebRTC = (currentUser, remoteUser) => {
   const peerConnectionRef = useRef(null);
   const localStreamRef = useRef(null);
   const remoteAudioRef = useRef(null);
+  const remoteStreamRef = useRef(null);
   const iceCandidatesRef = useRef([]);
   const callStartTimeRef = useRef(null);
   const timerIntervalRef = useRef(null);
   const statsIntervalRef = useRef(null);
   const networkWarningTimeoutRef = useRef(null);
+
+  // Attach remote stream to audio element and play
+  const attachRemoteAudio = useCallback(() => {
+    const audioEl = remoteAudioRef.current;
+    const stream = remoteStreamRef.current;
+    if (!audioEl || !stream) return;
+
+    if (audioEl.srcObject !== stream) {
+      console.log('🔊 Attaching remote stream to audio element');
+      audioEl.srcObject = stream;
+    }
+    audioEl.muted = false;
+    audioEl.volume = 1.0;
+
+    if (audioEl.paused) {
+      const playPromise = audioEl.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('✅ Remote audio playing successfully');
+          })
+          .catch(err => {
+            console.error('❌ Error playing audio:', err.name, err.message);
+            // Store retry for user interaction (works on both mobile and desktop)
+            window.__retryAudioPlay = () => {
+              if (remoteAudioRef.current && remoteAudioRef.current.paused && remoteStreamRef.current) {
+                remoteAudioRef.current.srcObject = remoteStreamRef.current;
+                remoteAudioRef.current.play()
+                  .then(() => console.log('✅ Audio playing after user interaction'))
+                  .catch(e => console.error('❌ Still failed:', e));
+              }
+            };
+          });
+      }
+    }
+  }, []);
+
+  // Re-attach remote audio after React re-renders (ensures audio survives state changes)
+  useEffect(() => {
+    if (callStatus === 'connected' && remoteStreamRef.current) {
+      // Small delay to ensure DOM is settled after re-render
+      const timer = setTimeout(() => attachRemoteAudio(), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [callStatus, attachRemoteAudio]);
 
   // Initialize RTCPeerConnection
   const createPeerConnection = useCallback(() => {
@@ -103,87 +149,26 @@ export const useWebRTC = (currentUser, remoteUser) => {
       console.log(`   Track kind: ${event.track.kind}`);
       console.log(`   Track state: ${event.track.readyState}`);
       console.log(`   Streams: ${event.streams.length}`);
-      
-      // Fallback: Mark call as connected when we receive remote audio
-      // (in case connectionstatechange event doesn't fire)
+
       if (event.track.kind === 'audio') {
+        // Store the remote stream in a ref - useEffect will attach it to audio element
+        if (event.streams && event.streams.length > 0) {
+          console.log('✅ Storing remote stream from event.streams[0]');
+          remoteStreamRef.current = event.streams[0];
+        } else {
+          console.log('⚠️  No streams in event, creating MediaStream');
+          if (!remoteStreamRef.current) {
+            remoteStreamRef.current = new MediaStream();
+          }
+          remoteStreamRef.current.addTrack(event.track);
+        }
+
+        // Attach to audio element immediately if available
+        attachRemoteAudio();
+
+        // Mark call as connected (triggers re-render, useEffect will re-attach if needed)
         console.log('✅ Audio track received - updating call status to connected');
         setCallStatus('connected');
-      }
-      
-      if (remoteAudioRef.current) {
-        console.log('🔊 Audio element found, setting up stream...');
-        
-        // Use the stream directly if available
-        if (event.streams && event.streams.length > 0) {
-          console.log('✅ Setting audio element srcObject to remote stream');
-          remoteAudioRef.current.srcObject = event.streams[0];
-        } else {
-          // Fallback: create MediaStream with tracks
-          console.log('⚠️  No streams in event, creating MediaStream');
-          if (!remoteAudioRef.current.srcObject) {
-            remoteAudioRef.current.srcObject = new MediaStream();
-          }
-          const remoteStream = remoteAudioRef.current.srcObject;
-          remoteStream.addTrack(event.track);
-        }
-        
-        // Ensure audio element is ready to play
-        console.log('🔊 Configuring audio element for playback...');
-        // Make sure element is not muted and has correct attributes
-        remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.volume = 1.0;
-        
-        console.log(`   Muted: ${remoteAudioRef.current.muted}, Volume: ${remoteAudioRef.current.volume}`);
-        
-        // Try to play - use setTimeout to ensure DOM is ready
-        setTimeout(() => {
-          if (!remoteAudioRef.current) {
-            console.error('❌ Audio element disappeared before play attempt');
-            return;
-          }
-          
-          // Check if device is mobile
-          const isMobile = /iPhone|iPad|Android|webOS/i.test(navigator.userAgent);
-          console.log(`📱 Device type: ${isMobile ? 'MOBILE' : 'DESKTOP'}`);
-          
-          const playPromise = remoteAudioRef.current.play();
-          if (playPromise !== undefined) {
-            playPromise
-              .then(() => {
-                console.log('✅ Remote audio playing successfully');
-                console.log(`   Volume: ${remoteAudioRef.current.volume}`);
-                console.log(`   Paused: ${remoteAudioRef.current.paused}`);
-                console.log(`   Muted: ${remoteAudioRef.current.muted}`);
-              })
-              .catch(err => {
-                console.error('❌ Error playing audio:', err);
-                console.error(`   Error name: ${err.name}`);
-                console.error(`   Error message: ${err.message}`);
-                console.log('   Possible reasons: autoplay policy, muted tab, no audio data');
-                console.log('   Trying to resume on user interaction...');
-                
-                // On mobile, try playing with lower volume first, then unmute on interaction
-                if (isMobile) {
-                  console.log('📱 Mobile detected - will retry on user click');
-                  remoteAudioRef.current.muted = false;
-                  remoteAudioRef.current.volume = 1.0;
-                  // Store reference to try playing on user click
-                  window.__remoteAudioRef = remoteAudioRef.current;
-                  window.__retryAudioPlay = () => {
-                    console.log('🔄 Retrying audio play on user interaction...');
-                    if (remoteAudioRef.current && remoteAudioRef.current.paused) {
-                      remoteAudioRef.current.play()
-                        .then(() => console.log('✅ Audio playing after user interaction'))
-                        .catch(e => console.error('❌ Still failed:', e));
-                    }
-                  };
-                }
-              });
-          }
-        }, 0);
-      } else {
-        console.error('❌ remoteAudioRef is null - audio element not found in DOM!');
       }
     });
 
@@ -622,6 +607,7 @@ export const useWebRTC = (currentUser, remoteUser) => {
     // Reset timer reference for next call
     callStartTimeRef.current = null;
     callRemoteUserRef.current = null; // Reset captured remote user
+    remoteStreamRef.current = null; // Reset remote stream
 
     // Close peer connection
     if (peerConnectionRef.current) {
@@ -641,7 +627,8 @@ export const useWebRTC = (currentUser, remoteUser) => {
     }
 
     iceCandidatesRef.current = [];
-    
+    delete window.__retryAudioPlay;
+
     console.log('✅ Cleanup complete');
   }, [stopCallTimer]);
 
@@ -737,8 +724,10 @@ export const useWebRTC = (currentUser, remoteUser) => {
     stopCallTimer(); // Stop timer and network monitoring
     saveCallHistory('completed'); // Save call to history
 
+    // Use callRemoteUserRef (captured at call start) for reliability
+    const target = callRemoteUserRef.current || incomingCaller || remoteUser;
     getSocket().emit('end-call', {
-      to: remoteUser,
+      to: target,
       from: currentUser
     });
 
@@ -750,7 +739,7 @@ export const useWebRTC = (currentUser, remoteUser) => {
       setCallDuration(0);
       setNetworkWarning(null);
     }, 1000);
-  }, [remoteUser, currentUser, stopCallTimer, saveCallHistory, cleanup]);
+  }, [remoteUser, incomingCaller, currentUser, stopCallTimer, saveCallHistory, cleanup]);
 
   // Handle remote end call (don't re-emit)
   const handleRemoteEndCall = useCallback(() => {

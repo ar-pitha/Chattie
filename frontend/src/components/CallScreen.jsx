@@ -78,7 +78,6 @@ const CallScreen = ({
         autoPlay={true}
         playsInline
         controls={false}
-        crossOrigin="anonymous"
       />
 
       <div className="call-overlay">
