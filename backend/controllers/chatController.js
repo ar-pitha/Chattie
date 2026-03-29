@@ -61,7 +61,12 @@ exports.getMessages = async (req, res) => {
     );
     // Notify frontend to clear the badge
     if (io) {
-      io.to(`user_${sender}`).emit('unread-count-cleared', { senderUsername: receiver });
+      const clearData = { senderUsername: receiver };
+      io.to(`user_${sender}`).emit('unread-count-cleared', clearData);
+      const senderSocketId = connectedUsers?.[sender];
+      if (senderSocketId) {
+        io.to(senderSocketId).emit('unread-count-cleared', clearData);
+      }
     }
 
     // Get all messages between two users
@@ -132,18 +137,27 @@ exports.saveMessage = async (req, res) => {
         : {};
       const newCount = countsObj[sender] || 1;
       console.log(`📬 Unread count: ${sender} → ${receiver}, count=${newCount}`);
-      io.to(`user_${receiver}`).emit('unread-count-updated', {
-        senderUsername: sender,
-        count: newCount
-      });
+      const unreadData = { senderUsername: sender, count: newCount };
+      io.to(`user_${receiver}`).emit('unread-count-updated', unreadData);
+      // Direct socket fallback
+      const receiverSocketId = connectedUsers?.[receiver];
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit('unread-count-updated', unreadData);
+      }
     }
 
     const messageObject = message.toObject();
 
     // Emit receive_message to receiver in real-time (server-authoritative delivery)
-    // This ensures the receiver always gets the message even if client socket is unstable
+    // Use both room-based AND direct socket delivery for robustness in deployment
+    // (Render free tier can drop rooms after sleep/wake cycles)
     if (io) {
       io.to(`user_${receiver}`).emit('receive_message', messageObject);
+      // Direct socket fallback in case room membership was lost
+      const receiverSocketId = connectedUsers?.[receiver];
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit('receive_message', messageObject);
+      }
     }
 
     res.status(201).json({ message: 'Message saved successfully', data: messageObject });
