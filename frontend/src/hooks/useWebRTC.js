@@ -56,7 +56,7 @@ export const useWebRTC = (currentUser, remoteUser) => {
   // Detect mobile once
   const isMobile = /iPhone|iPad|Android|webOS/i.test(navigator.userAgent);
   // Mobile needs higher base volume since speakers are smaller
-  const EARPIECE_VOLUME = isMobile ? 0.8 : 0.3;
+  const EARPIECE_VOLUME = isMobile ? 0.6 : 0.3;
   const SPEAKER_VOLUME = 1.0;
 
   // Attach remote stream to audio element and play (reads speakerEnabled via ref to avoid stale closures)
