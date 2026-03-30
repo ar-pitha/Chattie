@@ -78,9 +78,9 @@ export const emitSendMessage = (sender, receiver, text, replyTo = null, messageD
   }
 };
 
-export const emitDeleteMessage = (messageId) => {
+export const emitDeleteMessage = (messageId, sender, receiver) => {
   const socket = getSocket();
-  socket.emit('delete_message', { messageId });
+  socket.emit('delete_message', { messageId, sender, receiver });
 };
 
 export const emitDeleteMessageForMe = (messageId, username) => {

@@ -15,157 +15,127 @@ const Settings = ({ currentUsername, isOpen, onClose, hasAppLock, onAppLockChang
 
   const handleSetAppLock = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
+    setError(''); setSuccess('');
     if (!password || !confirmPassword) { setError('Both fields are required'); return; }
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
-    if (password.length < 4) { setError('Password must be at least 4 characters'); return; }
-
+    if (password.length < 4) { setError('Minimum 4 characters'); return; }
     setLoading(true);
     try {
       await authAPI.setAppLockPassword(currentUsername, password);
       await authAPI.toggleAppLock(currentUsername, true);
       onAppLockChange?.(true);
       setSuccess('App lock enabled');
-      setTimeout(() => { setPassword(''); setConfirmPassword(''); onClose(); }, 1500);
+      setTimeout(() => { setPassword(''); setConfirmPassword(''); setSuccess(''); onClose(); }, 1400);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to set app lock');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDisableClick = () => {
-    setShowDisableConfirm(true);
-    setDisablePassword('');
-    setError('');
+    } finally { setLoading(false); }
   };
 
   const handleConfirmDisable = async () => {
-    if (!disablePassword) {
-      setError('Password is required');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    setSuccess('');
+    if (!disablePassword) { setError('Enter your password'); return; }
+    setLoading(true); setError(''); setSuccess('');
     try {
-      // Verify password before disabling
       await authAPI.verifyAppLockPassword(currentUsername, disablePassword);
-      
-      // Password verified, now disable app lock
       await authAPI.toggleAppLock(currentUsername, false);
       setSuccess('App lock disabled');
       onAppLockChange?.(false);
-      setTimeout(() => {
-        setDisablePassword('');
-        setShowDisableConfirm(false);
-        onClose();
-      }, 1500);
+      setTimeout(() => { setDisablePassword(''); setShowDisableConfirm(false); setSuccess(''); onClose(); }, 1400);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to disable app lock');
-    } finally {
-      setLoading(false);
-    }
+      setError(err.response?.data?.message || 'Incorrect password');
+    } finally { setLoading(false); }
   };
 
-  const handleCancelDisable = () => {
+  const handleClose = () => {
+    setError(''); setSuccess('');
+    setPassword(''); setConfirmPassword(''); setDisablePassword('');
     setShowDisableConfirm(false);
-    setDisablePassword('');
-    setError('');
+    onClose();
   };
 
   return (
-    <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="settings-header">
-          <h2>Settings</h2>
-          <button className="close-btn" onClick={onClose} aria-label="Close">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <div className="st-overlay" onClick={handleClose}>
+      <div className="st-modal" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="st-header">
+          <span className="st-header-title">Settings</span>
+          <button className="st-close" onClick={handleClose} aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
         </div>
 
-        <div className="settings-content">
-          <div className="settings-section">
-            <h3>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-              </svg>
-              App Lock
-            </h3>
+        {/* Body */}
+        <div className="st-body">
+          <div className="st-center">
 
-            {hasAppLock ? (
-              <div className="app-lock-status active">
-                <p className="status-text">App lock is enabled</p>
-                <p className="settings-description">Your chat is protected with a password.</p>
-                
-                {!showDisableConfirm ? (
-                  <button type="button" disabled={loading} className="disable-btn" onClick={handleDisableClick}>
-                    {loading ? 'Disabling...' : 'Disable App Lock'}
-                  </button>
-                ) : (
-                  <div className="disable-confirm-form">
-                    <p className="confirm-text">Enter your app lock password to disable:</p>
-                    <div className="form-group">
-                      <input
-                        type="password"
-                        placeholder="Enter app lock password"
-                        value={disablePassword}
-                        onChange={(e) => { setDisablePassword(e.target.value); setError(''); }}
-                        disabled={loading}
-                      />
-                    </div>
-                    {error && <div className="error-message">{error}</div>}
-                    <div className="button-group">
-                      <button
-                        type="button"
-                        className="cancel-btn"
-                        onClick={handleCancelDisable}
-                        disabled={loading}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className="confirm-btn"
-                        onClick={handleConfirmDisable}
-                        disabled={loading}
-                      >
-                        {loading ? 'Verifying...' : 'Disable'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="app-lock-status inactive">
-                <p className="status-text">App lock is disabled</p>
-                <p className="settings-description">Set a password to protect your chats.</p>
-              </div>
-            )}
+            <p className="st-section-label">App Lock</p>
 
-            <div className="divider"></div>
+            <div className="st-card">
+              <div className="st-lock-row">
+                <div className="st-lock-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </div>
+                <div className="st-lock-info">
+                  <span className="st-lock-title">App Lock</span>
+                  <span className="st-lock-desc">
+                    {hasAppLock ? 'Your chats are password protected' : 'Protect your chats with a password'}
+                  </span>
+                </div>
+                <span className={`st-status-dot ${hasAppLock ? 'on' : 'off'}`} />
+              </div>
+            </div>
 
             {!hasAppLock && (
-              <form onSubmit={handleSetAppLock} className="settings-form">
-                <div className="form-group">
-                  <label htmlFor="password">Password</label>
-                  <input id="password" type="password" placeholder="Enter password" value={password} onChange={(e) => { setPassword(e.target.value); setError(''); }} disabled={loading} required />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="confirmPassword">Confirm Password</label>
-                  <input id="confirmPassword" type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }} disabled={loading} required />
-                </div>
-                {error && <div className="error-message">{error}</div>}
-                {success && <div className="success-message">{success}</div>}
-                <button type="submit" disabled={loading} className="submit-btn">
-                  {loading ? 'Setting...' : 'Set App Lock Password'}
-                </button>
-              </form>
+              <div className="st-card st-form-card">
+                <form onSubmit={handleSetAppLock}>
+                  <div className="st-field">
+                    <label htmlFor="st-pw">Password</label>
+                    <input id="st-pw" type="password" placeholder="Enter a password" value={password} onChange={e => { setPassword(e.target.value); setError(''); }} disabled={loading} />
+                  </div>
+                  <div className="st-field">
+                    <label htmlFor="st-cpw">Confirm Password</label>
+                    <input id="st-cpw" type="password" placeholder="Re-enter password" value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); setError(''); }} disabled={loading} />
+                  </div>
+                  {error   && <p className="st-error">{error}</p>}
+                  {success && <p className="st-success">{success}</p>}
+                  <button type="submit" className="st-btn-primary" disabled={loading}>
+                    {loading ? 'Saving…' : 'Enable App Lock'}
+                  </button>
+                </form>
+              </div>
             )}
+
+            {hasAppLock && (
+              <div className="st-card st-form-card">
+                {!showDisableConfirm ? (
+                  <>
+                    {error   && <p className="st-error">{error}</p>}
+                    {success && <p className="st-success">{success}</p>}
+                    <button type="button" className="st-btn-danger" onClick={() => { setShowDisableConfirm(true); setError(''); }} disabled={loading}>
+                      Disable App Lock
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="st-field">
+                      <label htmlFor="st-dpw">Enter password to disable</label>
+                      <input id="st-dpw" type="password" placeholder="Your app lock password" value={disablePassword} onChange={e => { setDisablePassword(e.target.value); setError(''); }} disabled={loading} autoFocus />
+                    </div>
+                    {error   && <p className="st-error">{error}</p>}
+                    {success && <p className="st-success">{success}</p>}
+                    <div className="st-btn-row">
+                      <button type="button" className="st-btn-ghost" onClick={() => { setShowDisableConfirm(false); setDisablePassword(''); setError(''); }} disabled={loading}>Cancel</button>
+                      <button type="button" className="st-btn-danger" onClick={handleConfirmDisable} disabled={loading}>{loading ? 'Verifying…' : 'Disable'}</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
           </div>
         </div>
       </div>

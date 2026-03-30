@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  profilePic: {
+    type: String,
+    default: null
+  },
   // Track unread message counts per user: { username: count }
   unreadCounts: {
     type: Map,

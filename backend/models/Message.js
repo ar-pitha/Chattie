@@ -26,6 +26,10 @@ const messageSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
+  deletedForAll: {
+    type: Boolean,
+    default: false
+  },
   replyTo: {
     messageId: mongoose.Schema.Types.ObjectId,
     text: String,

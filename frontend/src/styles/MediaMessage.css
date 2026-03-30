@@ -10,17 +10,18 @@
 
 .media-content {
   max-width: 330px;
-  border-radius: 8px;
+  border-radius: 7.5px;
   overflow: hidden;
   position: relative;
+  box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
 }
 
 .media-wrapper.other .media-content {
-  background: var(--bg-msg-received);
+  background: #ffffff;
 }
 
 .media-wrapper.own .media-content {
-  background: var(--bg-msg-sent);
+  background: #E0DDF7;
 }
 
 /* ===== Photo ===== */
@@ -175,14 +176,12 @@
 .doc-icon {
   width: 40px;
   height: 40px;
-  background: #7F66FF;
+  background: #6C63FF;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 20px;
-  line-height: 1;
 }
 
 .doc-info {
@@ -208,14 +207,17 @@
 }
 
 .open-icon {
-  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  opacity: 0.5;
+  color: var(--text-light);
+  opacity: 0.6;
   transition: opacity 150ms ease;
 }
 
 .media-document:hover .open-icon {
-  opacity: 0.85;
+  opacity: 1;
 }
 
 /* Document download button */
@@ -226,9 +228,9 @@
   gap: 5px;
   padding: 7px 12px;
   margin: 0 10px 10px;
-  background: rgba(0, 128, 105, 0.1);
+  background: rgba(0, 0, 0, 0.06);
   color: var(--primary);
-  border: 1px solid rgba(0, 128, 105, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
@@ -237,8 +239,8 @@
 }
 
 .doc-download-btn:hover {
-  background: rgba(0, 128, 105, 0.18);
-  border-color: rgba(0, 128, 105, 0.35);
+  background: rgba(0, 0, 0, 0.1);
+  border-color: rgba(0, 0, 0, 0.2);
 }
 
 .doc-download-btn:active {
@@ -312,7 +314,7 @@
 
   .video-play-btn svg { width: 22px; height: 22px; }
 
-  .doc-icon { width: 36px; height: 36px; font-size: 18px; }
+  .doc-icon { width: 36px; height: 36px; }
   .media-document { padding: 8px 12px; gap: 10px; }
   .doc-download-btn { padding: 6px 10px; margin: 0 8px 8px; font-size: 11px; }
 }

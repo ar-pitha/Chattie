@@ -5,7 +5,7 @@ exports.getAllUsers = async (req, res) => {
     const currentUserId = req.query.currentUserId;
 
     // Get all users except the current user
-    const users = await User.find({ _id: { $ne: currentUserId } }).select('_id username isOnline unreadCounts');
+    const users = await User.find({ _id: { $ne: currentUserId } }).select('_id username isOnline unreadCounts profilePic');
 
     res.status(200).json(users);
   } catch (error) {

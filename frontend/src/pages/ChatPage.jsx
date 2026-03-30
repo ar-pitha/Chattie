@@ -5,12 +5,12 @@ import MessageInput from '../components/MessageInput';
 import AppLockModal from '../components/AppLockModal';
 import Settings from '../components/Settings';
 import { authAPI, usersAPI, chatAPI } from '../utils/api';
-import { disconnectSocket, emitUserLogout, initializeSocket, emitUserJoin, onUnreadCountUpdated, onUnreadCountCleared, emitClearUnreadCount, onUserOnline, onUserOffline, onTypingIndicator, onStopTyping, emitUserAway, emitUserBack, onReceiveMessage, onSocketConnect } from '../utils/socket';
+import { disconnectSocket, emitUserLogout, initializeSocket, emitUserJoin, onUnreadCountUpdated, onUnreadCountCleared, emitClearUnreadCount, onUserOnline, onUserOffline, onTypingIndicator, onStopTyping, emitUserAway, emitUserBack, onReceiveMessage, onSocketConnect, onMessageStatusUpdated, onDeleteMessage, getSocket } from '../utils/socket';
 import { setupForegroundNotifications, requestFCMToken, registerServiceWorker } from '../utils/firebase';
 import { useAppSecurity, setAppLockSession, wasAppLocked } from '../utils/security';
 import '../styles/ChatPage.css';
 
-const ChatPage = ({ currentUser, onLogout }) => {
+const ChatPage = ({ currentUser, onLogout, onCurrentUserUpdate }) => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
   const [users, setUsers] = useState([]);
@@ -53,7 +53,7 @@ const ChatPage = ({ currentUser, onLogout }) => {
     if (message.receiver) {
       setLastMessages((prev) => ({
         ...prev,
-        [message.receiver]: { text: message.text, sender: message.sender, timestamp: message.timestamp || new Date().toISOString(), status: message.status || 'sent' }
+        [message.receiver]: { _id: message._id, text: message.text, sender: message.sender, timestamp: message.timestamp || new Date().toISOString(), status: message.status || 'sent' }
       }));
     }
   }, []);
@@ -161,6 +161,22 @@ const ChatPage = ({ currentUser, onLogout }) => {
     return () => { unsubOn(); unsubOff(); };
   }, []);
 
+  // Profile pic updates: listen for other users changing their pic
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+    const handler = ({ username, profilePic }) => {
+      setUsers((prev) => prev.map((u) => u.username === username ? { ...u, profilePic } : u));
+      setSelectedUser((prev) => prev && prev.username === username ? { ...prev, profilePic } : prev);
+    };
+    socket.on('profile-pic-updated', handler);
+    return () => socket.off('profile-pic-updated', handler);
+  }, []);
+
+  const handleProfilePicUpdate = useCallback((profilePic) => {
+    onCurrentUserUpdate?.({ ...currentUser, profilePic });
+  }, [currentUser, onCurrentUserUpdate]);
+
   // Update lastMessages when receiving a new message (for sidebar preview on both sides)
   useEffect(() => {
     const unsub = onReceiveMessage((message) => {
@@ -168,11 +184,42 @@ const ChatPage = ({ currentUser, onLogout }) => {
         // Incoming message: key by sender
         setLastMessages((prev) => ({
           ...prev,
-          [message.sender]: { text: message.text, sender: message.sender, timestamp: message.timestamp || new Date().toISOString(), status: message.status || 'sent' }
+          [message.sender]: { _id: message._id, text: message.text, sender: message.sender, timestamp: message.timestamp || new Date().toISOString(), status: message.status || 'sent' }
         }));
       }
     });
     return unsub;
+  }, [currentUser.username]);
+
+  // Sync lastMessages status with real-time status updates (sent→delivered→seen)
+  useEffect(() => {
+    return onMessageStatusUpdated((data) => {
+      if (data.sender === currentUser.username) {
+        setLastMessages((prev) => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach((key) => {
+            const msg = updated[key];
+            if (msg._id && String(msg._id) === String(data.messageId)) {
+              updated[key] = { ...msg, status: data.status };
+            }
+          });
+          return updated;
+        });
+      }
+    });
+  }, [currentUser.username]);
+
+  // Update sidebar when a message is deleted for all (real-time — other user deleted)
+  useEffect(() => {
+    return onDeleteMessage((d) => {
+      // Figure out which conversation key to update
+      const otherUser = d.sender === currentUser.username ? d.receiver : d.sender;
+      if (!otherUser) return;
+      setLastMessages((prev) => {
+        if (!prev[otherUser]) return prev;
+        return { ...prev, [otherUser]: { ...prev[otherUser], text: 'This message was deleted', deletedForAll: true } };
+      });
+    });
   }, [currentUser.username]);
 
   // Unread count socket listeners — single source of truth from backend
@@ -218,26 +265,17 @@ const ChatPage = ({ currentUser, onLogout }) => {
       <AppLockModal username={currentUser.username} onUnlock={() => { setAppLockSession(currentUser.username); setAppLockModalOpen(false); }} isOpen={appLockModalOpen} />
       <Settings currentUsername={currentUser.username} isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} hasAppLock={hasAppLock} onAppLockChange={(e) => setHasAppLock(e)} />
 
-      <div className={`app-header ${isChatOpen ? 'chat-open' : ''}`}>
-        <div className="header-left">
-          <span className="app-title">Chattie</span>
-        </div>
-        <div className="header-right">
-          <button className="header-icon-btn" onClick={() => setSettingsModalOpen(true)} aria-label="Settings">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          </button>
-          <button className="header-icon-btn" onClick={handleLogout} aria-label="Logout">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          </button>
-        </div>
-      </div>
-
       <div className={`chat-container ${isChatOpen ? 'chat-open' : ''}`}>
         <div className="sidebar-panel">
-          <Sidebar currentUser={currentUser} selectedUser={selectedUser} onSelectUser={handleSelectUser} users={users} setUsers={setUsers} unreadCounts={unreadCounts} typingUsers={typingUsers} lastMessageTimes={lastMessageTimes} lastMessages={lastMessages} />
+          <Sidebar currentUser={currentUser} selectedUser={selectedUser} onSelectUser={handleSelectUser} users={users} setUsers={setUsers} unreadCounts={unreadCounts} typingUsers={typingUsers} lastMessageTimes={lastMessageTimes} lastMessages={lastMessages} onSettingsOpen={() => setSettingsModalOpen(true)} onLogout={handleLogout} onProfilePicUpdate={handleProfilePicUpdate} />
         </div>
         <div className="chat-panel">
-          <ChatWindow currentUser={currentUser} selectedUser={selectedUser} messages={messages} setMessages={setMessages} onReply={handleReply} unreadCounts={unreadCounts} onClearUnread={handleClearUnread} onBack={handleBack} scrollTrigger={scrollTrigger} />
+          <ChatWindow currentUser={currentUser} selectedUser={selectedUser} messages={messages} setMessages={setMessages} onReply={handleReply} unreadCounts={unreadCounts} onClearUnread={handleClearUnread} onBack={handleBack} scrollTrigger={scrollTrigger} onMessageDeletedForAll={(otherUsername) => {
+            setLastMessages((prev) => {
+              if (!prev[otherUsername]) return prev;
+              return { ...prev, [otherUsername]: { ...prev[otherUsername], text: 'This message was deleted', deletedForAll: true } };
+            });
+          }} />
           {selectedUser && (
             <MessageInput currentUser={currentUser} selectedUser={selectedUser} onMessageSent={handleMessageSent} replyingTo={replyingTo} onReplyCancel={() => setReplyingTo(null)} onMediaMenuToggle={(open) => { if (open) setScrollTrigger(s => s + 1); }} />
           )}

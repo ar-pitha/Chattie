@@ -83,6 +83,24 @@ export const mediaAPI = {
         'Content-Type': 'multipart/form-data'
       }
     });
+  },
+
+  uploadProfilePic: (file, userId) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('userId', userId);
+    return axios.post(`${API_BASE_URL}/media/profile-pic`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+
+  deleteProfilePic: (userId) => {
+    return axios.delete(`${API_BASE_URL}/media/profile-pic/${userId}`);
+  },
+
+  getProfilePicUrl: (fileId) => {
+    if (!fileId) return null;
+    return `${API_BASE_URL}/media/download/${fileId}`;
   }
 };
 

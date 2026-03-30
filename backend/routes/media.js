@@ -271,6 +271,94 @@ router.post('/upload', upload.single('file'), async (req, res) => {
   }
 });
 
+// Upload profile picture
+router.post('/profile-pic', upload.single('file'), async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const file = req.file;
+
+    if (!userId || !file) {
+      return res.status(400).json({ message: 'Missing userId or file' });
+    }
+
+    // Only allow images
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedMimes.includes(file.mimetype)) {
+      return res.status(400).json({ message: 'Only JPG, PNG, and WebP images are allowed' });
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      return res.status(400).json({ message: 'Image must be under 5MB' });
+    }
+
+    const ready = await waitForGridFS();
+    if (!ready) {
+      return res.status(503).json({ message: 'File storage not ready' });
+    }
+
+    // Delete old profile pic from GridFS if exists
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (user.profilePic) {
+      try {
+        await gfs.delete(new mongoose.Types.ObjectId(user.profilePic));
+      } catch (e) { /* old file may not exist */ }
+    }
+
+    // Upload new pic
+    const uploadStream = gfs.openUploadStream(`profile_${userId}_${Date.now()}`, {
+      metadata: { type: 'profilePic', mimeType: file.mimetype, userId }
+    });
+    uploadStream.end(file.buffer);
+
+    uploadStream.on('finish', async () => {
+      const fileId = uploadStream.id.toString();
+      await User.findByIdAndUpdate(userId, { profilePic: fileId });
+
+      // Broadcast profile pic update to all online users
+      if (io) {
+        io.emit('profile-pic-updated', { username: user.username, profilePic: fileId });
+      }
+
+      res.status(200).json({ profilePic: fileId });
+    });
+
+    uploadStream.on('error', (error) => {
+      res.status(500).json({ message: 'Upload error', error: error.message });
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Profile pic upload error', error: error.message });
+  }
+});
+
+// Delete profile picture
+router.delete('/profile-pic/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user.profilePic) return res.status(200).json({ message: 'No profile pic to delete' });
+
+    const ready = await waitForGridFS();
+    if (!ready) return res.status(503).json({ message: 'File storage not ready' });
+
+    try {
+      await gfs.delete(new mongoose.Types.ObjectId(user.profilePic));
+    } catch (e) { /* file may already be gone */ }
+
+    await User.findByIdAndUpdate(userId, { profilePic: null });
+
+    if (io) {
+      io.emit('profile-pic-updated', { username: user.username, profilePic: null });
+    }
+
+    res.status(200).json({ message: 'Profile pic deleted' });
+  } catch (error) {
+    res.status(500).json({ message: 'Delete error', error: error.message });
+  }
+});
+
 // Download media file from GridFS
 router.get('/download/:fileId', async (req, res) => {
   try {

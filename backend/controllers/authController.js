@@ -77,7 +77,8 @@ exports.login = async (req, res) => {
       user: {
         _id: user._id,
         username: user.username,
-        fcm_token: user.fcm_token
+        fcm_token: user.fcm_token,
+        profilePic: user.profilePic
       }
     });
   } catch (error) {

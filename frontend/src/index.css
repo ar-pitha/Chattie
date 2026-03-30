@@ -1,47 +1,47 @@
 :root {
-  --primary: #008069;
-  --primary-dark: #006B57;
-  --primary-light: #25D366;
+  --primary: #6C63FF;
+  --primary-dark: #5A52D5;
+  --primary-light: #8B83FF;
 
   --bg-app: #ffffff;
-  --bg-header: #008069;
+  --bg-header: #6C63FF;
   --bg-sidebar: #ffffff;
-  --bg-chat: #EFEAE2;
-  --bg-input-area: #F0F2F5;
-  --bg-search: #F0F2F5;
-  --bg-hover: #F5F6F6;
+  --bg-chat: #EDEBF5;
+  --bg-input-area: #F4F3FA;
+  --bg-search: #F0EFF7;
+  --bg-hover: #F3F2FA;
 
-  --bg-msg-sent: #D9FDD3;
+  --bg-msg-sent: #E0DDF7;
   --bg-msg-received: #ffffff;
-  --bg-msg-reply: rgba(0, 0, 0, 0.05);
-  --bg-msg-reply-sent: rgba(0, 0, 0, 0.06);
+  --bg-msg-reply: rgba(108, 99, 255, 0.07);
+  --bg-msg-reply-sent: rgba(108, 99, 255, 0.1);
 
-  --text-primary: #111B21;
-  --text-secondary: #667781;
-  --text-light: #8696A0;
+  --text-primary: #1a1a2e;
+  --text-secondary: #6b6b80;
+  --text-light: #9494a8;
   --text-on-primary: #ffffff;
-  --text-msg: #111B21;
-  --text-time: #667781;
-  --text-time-sent: #4E9A6F;
+  --text-msg: #1a1a2e;
+  --text-time: #9494a8;
+  --text-time-sent: #7a7a94;
 
-  --border-light: #E9EDEF;
-  --border-input: #CCD0D5;
+  --border-light: #E5E3EF;
+  --border-input: #D0CFE0;
 
-  --color-online: #25D366;
-  --color-offline: #8696A0;
-  --color-danger: #EA0038;
-  --color-success: #25D366;
+  --color-online: #43a047;
+  --color-offline: #9e9e9e;
+  --color-danger: #d32f2f;
+  --color-success: #43a047;
 
-  --tick-default: #B0BEC5;      /* Very light grey for sent/delivered */
-  --tick-seen: #000000;         /* Black for seen */
+  --tick-default: #b5b3c7;
+  --tick-seen: #6C63FF;
 
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.08);
-  --shadow-md: 0 2px 8px rgba(0,0,0,0.12);
-  --shadow-lg: 0 4px 16px rgba(0,0,0,0.16);
+  --shadow-sm: 0 1px 2px rgba(108,99,255,0.06);
+  --shadow-md: 0 2px 8px rgba(108,99,255,0.1);
+  --shadow-lg: 0 4px 16px rgba(108,99,255,0.14);
 
-  --bg-badge: #25D366;
+  --bg-badge: #6C63FF;
   --bg-modal: #ffffff;
-  --bg-overlay: rgba(0,0,0,0.5);
+  --bg-overlay: rgba(30,28,60,0.45);
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -79,7 +79,7 @@ body {
 
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: rgba(108,99,255,0.15); border-radius: 3px; }
 
 ::selection { background: var(--primary); color: white; }
 

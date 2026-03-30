@@ -113,7 +113,9 @@ io.on('connection', (socket) => {
   socket.on('delete_message', (data) => {
     console.log(`Message ${data.messageId} deleted by user`);
     socket.broadcast.emit('message_deleted', {
-      messageId: data.messageId
+      messageId: data.messageId,
+      sender: data.sender,
+      receiver: data.receiver
     });
   });
 

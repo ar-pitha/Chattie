@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { chatAPI } from '../utils/api';
+import { chatAPI, mediaAPI } from '../utils/api';
 import {
   onReceiveMessage, onDeleteMessage, onDeleteMessageForMe, onTypingIndicator,
   onStopTyping, onMessageStatusUpdated, onCallUser, onAnswerCall, onIceCandidate, onEndCall, emitMessageSeen, emitMessageDelivered, emitClearUnreadCount
@@ -58,13 +58,14 @@ const DoubleTick = () => (
   </svg>
 );
 
-const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply, unreadCounts, onClearUnread, onBack, scrollTrigger }) => {
+const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply, unreadCounts, onClearUnread, onBack, scrollTrigger, onMessageDeletedForAll }) => {
   const [loading, setLoading] = useState(false);
   const [activeMessageId, setActiveMessageId] = useState(null);
   const [showCallHistory, setShowCallHistory] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [showCallTypeSelector, setShowCallTypeSelector] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
@@ -79,7 +80,7 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
   const handleScroll = useCallback(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
-    setShowScrollBtn(container.scrollHeight - container.scrollTop - container.clientHeight > 200);
+    setShowScrollBtn(container.scrollHeight - container.scrollTop - container.clientHeight > 100);
   }, []);
 
   useEffect(() => {
@@ -91,6 +92,16 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  const scrollToReplyOriginal = useCallback((replyToMessageId) => {
+    if (!replyToMessageId) return;
+    const el = messagesContainerRef.current?.querySelector(`[data-msgid="${replyToMessageId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setHighlightedMessageId(replyToMessageId);
+      setTimeout(() => setHighlightedMessageId(null), 1500);
+    }
   }, []);
 
   // Scroll to bottom when media menu opens
@@ -166,8 +177,8 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
     };
   }, [selectedUser?.username, currentUser.username]);
 
-  useEffect(() => { return onDeleteMessage((d) => setMessages((p) => p.filter((m) => m._id !== d.messageId))); }, [setMessages]);
-  useEffect(() => { return onDeleteMessageForMe((d) => setMessages((p) => p.map((m) => m._id === d.messageId && d.username !== currentUser.username ? { ...m, text: '[Deleted message]', deletedForMe: true } : m))); }, [setMessages, currentUser.username]);
+  useEffect(() => { return onDeleteMessage((d) => setMessages((p) => p.map((m) => m._id === d.messageId ? { ...m, text: 'This message was deleted', deletedForAll: true, media: null, replyTo: null } : m))); }, [setMessages]);
+  useEffect(() => { return onDeleteMessageForMe((d) => setMessages((p) => p.filter((m) => !(m._id === d.messageId && d.username !== currentUser.username)))); }, [setMessages, currentUser.username]);
   const typingTimeoutRef = useRef(null);
   useEffect(() => {
     const unsub = onTypingIndicator((d) => {
@@ -193,11 +204,7 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
   useEffect(() => { return onEndCall(() => handleRemoteEndCall()); }, [handleRemoteEndCall]);
 
   useEffect(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
-    if (container.scrollHeight - container.scrollTop - container.clientHeight < 300) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const fetchMessages = async () => {
@@ -239,9 +246,12 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
 
   const handleDeleteMessage = (messageId, forMeOnly = false) => {
     if (forMeOnly) {
-      setMessages((p) => p.map((m) => m._id === messageId ? { ...m, text: '[Deleted message]', deletedForMe: true } : m));
-    } else {
+      // Delete for me — remove from view completely
       setMessages((p) => p.filter((m) => m._id !== messageId));
+    } else {
+      // Delete for all — show "message deleted" placeholder
+      setMessages((p) => p.map((m) => m._id === messageId ? { ...m, text: 'This message was deleted', deletedForAll: true, media: null, replyTo: null } : m));
+      onMessageDeletedForAll?.(selectedUser?.username);
     }
   };
 
@@ -284,10 +294,17 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
     return (
       <div className="chat-window empty">
         <div className="empty-state">
-          <svg className="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-          <h2>Select a chat to start messaging</h2>
+          <div className="empty-state-icon-wrap">
+            <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" width="90" height="90">
+              <circle cx="40" cy="40" r="38" stroke="#6C63FF" strokeWidth="1.5" strokeOpacity="0.15"/>
+              <path d="M40 18C27.85 18 18 26.954 18 38c0 5.292 2.274 10.09 5.985 13.593L22 58l7.08-2.268A23.813 23.813 0 0 0 40 58c12.15 0 22-8.954 22-20S52.15 18 40 18z" stroke="#6C63FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="32" cy="38" r="2" fill="#6C63FF"/>
+              <circle cx="40" cy="38" r="2" fill="#6C63FF"/>
+              <circle cx="48" cy="38" r="2" fill="#6C63FF"/>
+            </svg>
+          </div>
+          <h2 className="empty-state-title">Chattie</h2>
+          <p className="empty-state-subtitle">Send and receive messages instantly</p>
         </div>
       </div>
     );
@@ -310,7 +327,16 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
               </svg>
             </button>
           )}
-          <div className="chat-header-avatar">{getInitial(selectedUser.username)}</div>
+          <div className="chat-header-avatar">
+            {selectedUser.profilePic ? (
+              <img src={mediaAPI.getProfilePicUrl(selectedUser.profilePic)} alt={selectedUser.username} />
+            ) : (
+              <svg viewBox="0 0 212 212" width="100%" height="100%">
+                <path fill="rgba(255,255,255,0.3)" d="M106 0C47.5 0 0 47.5 0 106s47.5 106 106 106 106-47.5 106-106S164.5 0 106 0z"/>
+                <path fill="#fff" d="M106 45c20.4 0 37 16.6 37 37s-16.6 37-37 37-37-16.6-37-37 16.6-37 37-37zm0 100c33.1 0 60 14.3 60 32v8H46v-8c0-17.7 26.9-32 60-32z"/>
+              </svg>
+            )}
+          </div>
           <div className="header-info">
             <h2>{selectedUser.username}</h2>
             {isTyping ? (
@@ -378,8 +404,8 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
                 }
                 
                 return (
-                  <div key={item.key} className={`message ${isSent ? 'sent' : 'received'} ${msg.deletedForMe ? 'deleted' : ''}`} onClick={() => setActiveMessageId(activeMessageId === msg._id ? null : msg._id)}>
-                    {msg.media && msg.media.fileId ? (
+                  <div key={item.key} data-msgid={msg._id} className={`message ${isSent ? 'sent' : 'received'} ${msg.deletedForAll ? 'deleted' : ''} ${highlightedMessageId === msg._id ? 'highlighted' : ''}`} onClick={() => !msg.deletedForAll && setActiveMessageId(activeMessageId === msg._id ? null : msg._id)}>
+                    {msg.media && msg.media.fileId && !msg.deletedForAll ? (
                       <>
                         <MediaMessage message={msg} isOwn={isSent} />
                         <div className="message-footer" style={{ paddingLeft: '12px', marginTop: '4px' }}>
@@ -394,13 +420,22 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
                       </>
                     ) : (
                       <div className="message-bubble">
-                        {msg.replyTo && (
-                          <div className="message-reply-quote">
+                        {msg.replyTo && !msg.deletedForAll && (
+                          <div className="message-reply-quote" onClick={(e) => { e.stopPropagation(); scrollToReplyOriginal(msg.replyTo.messageId); }}>
                             <div className="reply-quote-sender">{msg.replyTo.sender}</div>
                             <div className="reply-quote-text">{msg.replyTo.text}</div>
                           </div>
                         )}
-                        <div className="message-text">{linkifyText(msg.text)}</div>
+                        <div className="message-text">
+                          {msg.deletedForAll ? (
+                            <span className="deleted-msg-text">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
+                                <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                              </svg>
+                              This message was deleted
+                            </span>
+                          ) : linkifyText(msg.text)}
+                        </div>
                         <div className="message-footer">
                           <span className="message-time">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           {isSent && (
@@ -412,7 +447,7 @@ const ChatWindow = ({ currentUser, selectedUser, messages, setMessages, onReply,
                         </div>
                       </div>
                     )}
-                    {activeMessageId === msg._id && !msg.deletedForMe && (
+                    {activeMessageId === msg._id && !msg.deletedForAll && (
                       <MessageActions messageId={msg._id} message={msg} currentUsername={currentUser.username} isOwnMessage={isSent} onDelete={handleDeleteMessage} onReply={handleReplyClick} onClose={() => setActiveMessageId(null)} />
                     )}
                   </div>

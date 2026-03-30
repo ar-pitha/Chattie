@@ -68,9 +68,9 @@
   height: 20px;
 }
 
-/* ===== Body below navbar - takes exactly remaining height ===== */
+/* ===== Body - takes full height ===== */
 .chat-container {
-  height: calc(100% - 50px);
+  height: 100%;
   display: flex;
   overflow: hidden;
 }
@@ -95,7 +95,7 @@
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
-  background: var(--bg-chat);
+  background: #ffffff;
 }
 
 /* ===== Mobile ===== */
@@ -110,7 +110,7 @@
   .header-icon-btn svg { width: 18px; height: 18px; }
 
   .chat-container {
-    height: calc(100% - 48px);
+    height: 100%;
   }
 
   .sidebar-panel {

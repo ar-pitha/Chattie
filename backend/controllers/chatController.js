@@ -31,14 +31,15 @@ exports.getLastMessages = async (req, res) => {
         sender: { $first: '$sender' },
         timestamp: { $first: '$timestamp' },
         status: { $first: '$status' },
-        media: { $first: '$media' }
+        media: { $first: '$media' },
+        deletedForAll: { $first: '$deletedForAll' }
       }}
     ]);
 
-    // Convert to { username: { text, sender, timestamp, status, media } }
+    // Convert to { username: { text, sender, timestamp, status, media, deletedForAll } }
     const result = {};
     lastMessages.forEach(m => {
-      result[m._id] = { text: m.text, sender: m.sender, timestamp: m.timestamp, status: m.status, media: m.media || null };
+      result[m._id] = { text: m.text, sender: m.sender, timestamp: m.timestamp, status: m.status, media: m.media || null, deletedForAll: m.deletedForAll || false };
     });
 
     res.json(result);
@@ -87,6 +88,7 @@ exports.getMessages = async (req, res) => {
         timestamp: msg.timestamp,
         status: msg.status || 'sent',
         deletedFor: msg.deletedFor || [],
+        deletedForAll: msg.deletedForAll || false,
         replyTo: msg.replyTo || null,
         media: msg.media || null
       };
@@ -189,8 +191,13 @@ exports.deleteMessage = async (req, res) => {
     const { messageId } = req.params;
     if (!messageId) return res.status(400).json({ message: 'messageId required' });
 
-    const result = await Message.findByIdAndDelete(messageId);
-    if (!result) return res.status(404).json({ message: 'Message not found' });
+    const message = await Message.findByIdAndUpdate(messageId, {
+      text: 'This message was deleted',
+      deletedForAll: true,
+      media: null,
+      replyTo: null
+    }, { new: true });
+    if (!message) return res.status(404).json({ message: 'Message not found' });
 
     res.status(200).json({ message: 'Message deleted successfully' });
   } catch (error) {

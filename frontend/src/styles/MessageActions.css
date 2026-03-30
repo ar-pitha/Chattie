@@ -1,76 +1,75 @@
 .message-actions {
   display: flex;
-  gap: 6px;
-  padding: 6px;
+  gap: 1px;
+  padding: 2px;
   background: var(--bg-modal);
-  border-radius: var(--radius-md);
-  margin-top: 4px;
-  flex-wrap: wrap;
-  box-shadow: var(--shadow-md);
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   border: 1px solid var(--border-light);
-  animation: fadeIn 150ms ease;
+  width: fit-content;
+  flex-shrink: 0;
+  align-self: flex-end;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+/* Each button staggers in */
+.message-actions .action-btn {
+  animation: maBtnPop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.message-actions .action-btn:nth-child(1) { animation-delay: 0s; }
+.message-actions .action-btn:nth-child(2) { animation-delay: 0.06s; }
+.message-actions .action-btn:nth-child(3) { animation-delay: 0.12s; }
+
+@keyframes maBtnPop {
+  from { opacity: 0; transform: scale(0.3); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 .action-btn {
-  padding: 8px 14px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
   border: none;
   background: transparent;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background var(--transition);
-  white-space: nowrap;
+  transition: background 0.2s ease, transform 0.15s ease;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-weight: 500;
+  justify-content: center;
 }
 
 .action-btn:hover:not(:disabled) {
   background: var(--bg-hover);
+  transform: scale(1.1);
 }
 
 .action-btn:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: scale(0.85);
 }
 
 .action-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .action-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
 }
 
-.reply-btn svg {
-  color: var(--primary);
-}
-
-.delete-for-me-btn svg {
-  color: var(--color-warning);
-}
-
-.delete-all-btn svg {
-  color: var(--color-danger);
-}
+.reply-btn svg { color: var(--primary); }
+.delete-for-me-btn svg { color: var(--text-light); }
+.delete-all-btn svg { color: var(--color-danger); }
 
 .delete-all-btn:hover:not(:disabled) {
   background: rgba(234, 0, 56, 0.08);
 }
 
 .action-error {
-  width: 100%;
   color: var(--color-danger);
-  font-size: 12px;
+  font-size: 11px;
   text-align: center;
-  padding: 4px;
+  padding: 2px 6px;
 }

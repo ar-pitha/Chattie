@@ -34,7 +34,7 @@ function App() {
   return (
     <div className="app">
       {currentUser ? (
-        <ChatPage currentUser={currentUser} onLogout={handleLogout} />
+        <ChatPage currentUser={currentUser} onLogout={handleLogout} onCurrentUserUpdate={(user) => { setCurrentUser(user); localStorage.setItem('currentUser', JSON.stringify(user)); }} />
       ) : (
         <Auth onAuthSuccess={handleAuthSuccess} />
       )}

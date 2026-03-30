@@ -8,9 +8,49 @@
   overflow: hidden;
 }
 
-/* Search - FIXED at top of sidebar, never scrolls */
+/* ===== Header ===== */
+.sidebar-top-header {
+  height: 56px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-header);
+  flex-shrink: 0;
+}
+
+.sidebar-app-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-on-primary);
+  letter-spacing: 0.3px;
+}
+
+.sidebar-header-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.sidebar-header-btn {
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  color: var(--text-on-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition);
+  opacity: 0.85;
+}
+.sidebar-header-btn:hover { background: rgba(255,255,255,0.12); opacity: 1; }
+.sidebar-header-btn svg { width: 20px; height: 20px; }
+
+/* ===== Search ===== */
 .search-wrapper {
-  padding: 8px 10px;
+  padding: 8px 12px;
   flex-shrink: 0;
   background: var(--bg-sidebar);
 }
@@ -24,24 +64,33 @@
 .search-icon {
   position: absolute;
   left: 12px;
-  width: 16px; height: 16px;
+  width: 15px; height: 15px;
   color: var(--text-light);
   pointer-events: none;
+  transition: color var(--transition);
 }
 
 .search-box {
   width: 100%;
-  padding: 9px 12px 9px 38px;
-  border: none;
-  border-radius: var(--radius-md);
+  height: 36px;
+  padding: 0 12px 0 38px;
+  border: 1.5px solid transparent;
+  border-radius: 20px;
   font-size: 14px;
   background: var(--bg-search);
   color: var(--text-primary);
+  transition: border-color var(--transition), background var(--transition);
 }
-.search-box:focus { outline: none; }
+.search-box:focus {
+  outline: none;
+  border-color: rgba(108, 99, 255, 0.3);
+  background: #fff;
+}
+.search-box:focus + .search-icon,
+.search-box-container:focus-within .search-icon { color: var(--primary); }
 .search-box::placeholder { color: var(--text-light); }
 
-/* Users list - THE ONLY SCROLLABLE PART of sidebar */
+/* ===== Users list ===== */
 .users-list {
   flex: 1;
   overflow-y: auto;
@@ -49,84 +98,103 @@
   min-height: 0;
 }
 
+/* ===== User item row ===== */
 .user-item {
-  padding: 10px 14px;
+  padding: 0 12px 0 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 12px;
+  height: 72px;
   transition: background var(--transition);
+  position: relative;
 }
 .user-item:hover { background: var(--bg-hover); }
-.user-item.active { background: var(--bg-hover); }
 
+/* Active item — left accent + stronger bg */
+.user-item.active {
+  background: var(--bg-hover);
+}
+.user-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--primary);
+}
+
+/* ===== Avatar ===== */
 .user-avatar {
-  width: 48px; height: 48px;
-  border-radius: var(--radius-full);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: 600;
-  color: #fff;
+  width: 42px; height: 42px;
   flex-shrink: 0;
-  text-transform: uppercase;
   position: relative;
-  background: linear-gradient(135deg, #00A884 0%, #25D366 100%);
+  cursor: pointer;
+}
+.user-avatar img,
+.user-avatar .default-avatar-svg {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
 }
 
 .user-avatar-status-dot {
   position: absolute;
   bottom: 1px; right: 1px;
-  width: 12px; height: 12px;
-  border-radius: var(--radius-full);
+  width: 10px; height: 10px;
+  border-radius: 50%;
   border: 2px solid var(--bg-sidebar);
+  z-index: 1;
 }
+.user-avatar-status-dot.online  { background: var(--color-online); }
+.user-avatar-status-dot.offline { background: var(--color-offline); }
 
-.user-avatar-status-dot.online {
-  background: var(--color-online);
-}
-
-.user-avatar-status-dot.offline {
-  background: var(--color-offline);
-}
-
+/* ===== Content ===== */
 .user-item-content {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  justify-content: center;
+  gap: 3px;
+  height: 100%;
   border-bottom: 1px solid var(--border-light);
-  padding-bottom: 10px;
+  padding-right: 4px;
 }
 .user-item:last-child .user-item-content { border-bottom: none; }
 
 .user-item-top {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
 }
 
 .user-name {
-  font-size: 16px;
-  font-weight: 400;
+  font-size: 15px;
+  font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Bold name when unread */
+.user-item:has(.unread-badge) .user-name {
+  font-weight: 600;
+}
+
 .user-msg-time {
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: 11.5px;
+  color: var(--text-light);
   flex-shrink: 0;
   margin-left: 6px;
 }
-
 .user-msg-time.unread {
-  color: var(--color-online);
-  font-weight: 500;
+  color: var(--primary);
+  font-weight: 600;
 }
 
 .user-item-bottom {
@@ -136,8 +204,11 @@
   gap: 8px;
 }
 
-.user-status-text { font-size: 13px; color: var(--text-light); }
-.user-status-text.online { color: var(--color-online); }
+.user-status-text {
+  font-size: 13px;
+  color: var(--text-light);
+  font-style: italic;
+}
 
 .user-last-message {
   font-size: 13px;
@@ -147,19 +218,47 @@
   text-overflow: ellipsis;
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Darker last message when unread */
+.user-item:has(.unread-badge) .user-last-message {
+  color: var(--text-secondary);
+}
+
+.sidebar-tick {
+  flex-shrink: 0;
+  margin-right: 1px;
+}
+
+.deleted-preview {
+  font-style: italic;
+}
+.sidebar-deleted-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-light);
+}
+.sidebar-deleted-text svg {
+  color: var(--text-light);
+  flex-shrink: 0;
 }
 
 .user-typing-text {
   font-size: 13px;
-  color: var(--color-online);
-  font-style: italic;
+  color: var(--primary);
+  font-weight: 500;
 }
 
+/* ===== Unread badge ===== */
 .unread-badge {
   min-width: 20px; height: 20px;
-  padding: 0 5px;
-  color: #000;
-  background: #fff;
+  padding: 0 6px;
+  /* color: #fff; */
+  background: var(--primary);
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
@@ -167,6 +266,7 @@
   font-size: 11px;
   font-weight: 700;
   flex-shrink: 0;
+  /* box-shadow: 0 1px 4px rgba(108, 99, 255, 0.3); */
 }
 
 .sidebar-empty {
@@ -174,49 +274,120 @@
   text-align: center;
   color: var(--text-light);
   font-size: 14px;
+  line-height: 1.6;
 }
 
-/* Current user at bottom of sidebar */
+/* ===== Current user — bottom bar ===== */
 .sidebar-current-user {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
-  border-top: 1px solid var(--border-light);
+  padding: 10px 14px;
   background: var(--bg-sidebar);
+  border-top: 1px solid var(--border-light);
+  box-shadow: 0 -1px 6px rgba(0,0,0,0.04);
 }
 
 .sidebar-current-user-avatar {
-  width: 40px; height: 40px;
-  border-radius: var(--radius-full);
+  width: 38px; height: 38px;
+  flex-shrink: 0;
+  position: relative;
+  cursor: pointer;
+}
+.sidebar-current-user-avatar img,
+.sidebar-current-user-avatar .default-avatar-svg {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+.profile-pic-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
-  font-weight: 600;
-  color: #fff;
-  flex-shrink: 0;
-  text-transform: uppercase;
-  position: relative;
-  background: linear-gradient(135deg, #6C63FF 0%, #8B83FF 100%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  border-radius: 50%;
+}
+.sidebar-current-user-avatar:hover .profile-pic-overlay {
+  opacity: 1;
+}
+.profile-pic-loading {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--primary);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .sidebar-current-user-name {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 
+.sidebar-current-user-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.sidebar-action-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  color: var(--text-light);
+  transition: background var(--transition), color var(--transition);
+}
+.sidebar-action-btn svg { width: 18px; height: 18px; }
+.sidebar-action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--primary);
+}
+
+/* ===== Responsive ===== */
 @media (max-width: 768px) {
-  .user-avatar { width: 46px; height: 46px; font-size: 17px; }
+  .sidebar-top-header { height: 52px; padding: 0 12px; }
+  .sidebar-app-title { font-size: 18px; }
+  .user-item { height: 68px; }
+  .user-avatar { width: 40px; height: 40px; }
+  .user-name { font-size: 14.5px; }
+  .user-last-message { font-size: 12.5px; }
+  .user-msg-time { font-size: 11px; }
+  .unread-badge { min-width: 18px; height: 18px; font-size: 10px; }
 }
 
 @media (max-width: 480px) {
-  .user-item { padding: 9px 12px; }
-  .user-avatar { width: 44px; height: 44px; font-size: 16px; }
-  .user-name { font-size: 15px; }
+  .sidebar-top-header { height: 50px; padding: 0 10px; }
+  .sidebar-app-title { font-size: 17px; }
+  .user-item { height: 64px; padding: 0 8px 0 10px; gap: 10px; }
+  .user-avatar { width: 38px; height: 38px; }
+  .user-name { font-size: 14px; }
+  .user-last-message { font-size: 12px; }
+  .user-typing-text { font-size: 12px; }
+  .user-msg-time { font-size: 10.5px; }
+  .search-wrapper { padding: 6px 10px; }
+  .search-box { height: 34px; font-size: 13px; padding: 0 10px 0 34px; border-radius: 18px; }
+  .sidebar-current-user { padding: 10px; gap: 8px; }
+  .sidebar-current-user-name { font-size: 13px; }
+  .sidebar-current-user-avatar { width: 36px; height: 36px; font-size: 13px; }
 }
