@@ -1,16 +1,20 @@
-/* ===== Inline icon bar — same on desktop and mobile ===== */
+/* ===== Inline icon bar — absolutely positioned so it doesn't shrink the bubble ===== */
 .message-actions {
+  position: absolute;
+  bottom: 0;
   display: flex;
   gap: 1px;
   padding: 2px;
   background: var(--bg-modal);
   border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
   border: 1px solid var(--border-light);
   width: fit-content;
-  flex-shrink: 0;
-  align-self: flex-end;
+  z-index: 12;
 }
+
+.message.sent .message-actions { left: -2px; transform: translateX(-100%); }
+.message.received .message-actions { right: -2px; transform: translateX(100%); }
 
 /* Stagger animation */
 .message-actions .action-btn {
@@ -81,4 +85,144 @@
   font-size: 11px;
   text-align: center;
   padding: 2px 6px;
+}
+
+/* ===== Hover / Tap emoji picker — absolutely positioned beside the message ===== */
+.hover-emoji-picker {
+  position: absolute;
+  top: 50%;
+  display: flex;
+  gap: 1px;
+  padding: 3px 4px;
+  background: var(--bg-modal);
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  border: 1px solid var(--border-light);
+  z-index: 11;
+  animation: emojiFadeIn 0.15s ease-out;
+}
+
+.hover-emoji-picker.sent { left: 0; transform: translateY(-50%) translateX(-100%); }
+.hover-emoji-picker.received { right: 0; transform: translateY(-50%) translateX(100%); }
+
+@keyframes emojiFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.hover-emoji-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, background 0.15s ease;
+  padding: 0;
+}
+
+.hover-emoji-btn:hover {
+  transform: scale(1.25);
+  background: var(--bg-hover);
+}
+.hover-emoji-btn:active {
+  transform: scale(0.9);
+}
+.hover-emoji-btn.active {
+  background: transparent;
+}
+
+/* ===== Reaction badges — bottom corner of bubble (WhatsApp style) ===== */
+.reaction-badges-inline {
+  position: absolute;
+  bottom: -10px;
+  display: flex;
+  gap: 2px;
+  z-index: 2;
+}
+
+.message.sent .reaction-badges-inline { right: 4px; }
+.message.received .reaction-badges-inline { left: 4px; }
+
+.reaction-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px 4px;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+  user-select: none;
+}
+
+.reaction-pill:hover { transform: scale(1.12); }
+.reaction-pill:active { transform: scale(0.9); }
+
+/* Extra space below message when reactions overflow the bottom */
+.message:has(.reaction-badges-inline) {
+  margin-bottom: 10px;
+}
+
+/* ===== Mobile — emoji picker & actions below the message ===== */
+@media (max-width: 768px) {
+  .hover-emoji-picker {
+    position: absolute;
+    top: auto;
+    bottom: -38px;
+    left: 0;
+    right: auto;
+    transform: none;
+  }
+  .hover-emoji-picker.sent {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+  .hover-emoji-picker.received {
+    left: 0;
+    right: auto;
+    transform: none;
+  }
+
+  .message-actions {
+    position: absolute;
+    top: auto;
+    bottom: -32px;
+    left: auto;
+    right: auto;
+    transform: none;
+  }
+  .message.sent .message-actions {
+    right: 0;
+    left: auto;
+    transform: none;
+  }
+  .message.received .message-actions {
+    left: 0;
+    right: auto;
+    transform: none;
+  }
+
+  /* Extra bottom margin so the popup doesn't overlap next message */
+  .message:has(.hover-emoji-picker) {
+    margin-bottom: 40px;
+  }
+  .message:has(.message-actions) {
+    margin-bottom: 36px;
+  }
+  .message:has(.reaction-badges-inline):has(.hover-emoji-picker) {
+    margin-bottom: 48px;
+  }
+  .message:has(.reaction-badges-inline):has(.message-actions) {
+    margin-bottom: 44px;
+  }
 }

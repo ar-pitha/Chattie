@@ -10,6 +10,7 @@ router.post('/messages/delete-for-me', chatController.deleteMessageForMe);
 router.put('/messages/:messageId/edit', chatController.editMessage);
 router.post('/messages/:messageId/star', chatController.toggleStar);
 router.post('/messages/:messageId/pin', chatController.togglePin);
+router.post('/messages/:messageId/reaction', chatController.toggleReaction);
 router.get('/starred/:username', chatController.getStarredMessages);
 router.get('/pinned', chatController.getPinnedMessages);
 router.post('/call-event', chatController.saveCallEvent);

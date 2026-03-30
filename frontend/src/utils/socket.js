@@ -269,6 +269,13 @@ export const onMessagePinned = (callback) => {
   return () => socket.off('message_pinned', callback);
 };
 
+// Emoji Reactions
+export const onReactionUpdated = (callback) => {
+  const socket = getSocket();
+  socket.on('reaction_updated', callback);
+  return () => socket.off('reaction_updated', callback);
+};
+
 // WebRTC Call Events
 export const emitCallUser = (to, from, offer, callType = 'audio') => {
   const socket = getSocket();

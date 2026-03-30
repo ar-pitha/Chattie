@@ -96,7 +96,8 @@ exports.getMessages = async (req, res) => {
         pinned: msg.pinned || false,
         pinnedAt: msg.pinnedAt || null,
         pinnedBy: msg.pinnedBy || null,
-        callEvent: msg.callEvent || null
+        callEvent: msg.callEvent || null,
+        reactions: msg.reactions || []
       };
 
       if (msg.deletedFor && msg.deletedFor.includes(sender)) {
@@ -402,6 +403,61 @@ exports.saveCallEvent = async (req, res) => {
     res.status(201).json({ data: msgObj });
   } catch (error) {
     res.status(500).json({ message: 'Error saving call event', error: error.message });
+  }
+};
+
+// Toggle emoji reaction on a message
+exports.toggleReaction = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { emoji, username } = req.body;
+    if (!messageId || !emoji || !username) return res.status(400).json({ message: 'messageId, emoji, and username required' });
+
+    const message = await Message.findById(messageId);
+    if (!message) return res.status(404).json({ message: 'Message not found' });
+
+    let added = false;
+    const existingReaction = message.reactions.find(r => r.emoji === emoji);
+
+    if (existingReaction && existingReaction.users.includes(username)) {
+      // Same emoji tapped again — remove it (toggle off)
+      existingReaction.users = existingReaction.users.filter(u => u !== username);
+      if (existingReaction.users.length === 0) {
+        message.reactions = message.reactions.filter(r => r.emoji !== emoji);
+      }
+    } else {
+      // Remove user from any other reaction first (one reaction per user)
+      for (const r of message.reactions) {
+        r.users = r.users.filter(u => u !== username);
+      }
+      message.reactions = message.reactions.filter(r => r.users.length > 0);
+
+      // Add to the new emoji
+      const target = message.reactions.find(r => r.emoji === emoji);
+      if (target) {
+        target.users.push(username);
+      } else {
+        message.reactions.push({ emoji, users: [username] });
+      }
+      added = true;
+    }
+
+    await message.save();
+
+    // Notify both users in real-time
+    if (io) {
+      const reactionData = { messageId, emoji, username, added, reactions: message.reactions };
+      io.to(`user_${message.sender}`).emit('reaction_updated', reactionData);
+      io.to(`user_${message.receiver}`).emit('reaction_updated', reactionData);
+      const senderSid = connectedUsers?.[message.sender];
+      const receiverSid = connectedUsers?.[message.receiver];
+      if (senderSid) io.to(senderSid).emit('reaction_updated', reactionData);
+      if (receiverSid) io.to(receiverSid).emit('reaction_updated', reactionData);
+    }
+
+    res.status(200).json({ message: added ? 'Reaction added' : 'Reaction removed', reactions: message.reactions });
+  } catch (error) {
+    res.status(500).json({ message: 'Error toggling reaction', error: error.message });
   }
 };
 

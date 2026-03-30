@@ -402,7 +402,21 @@
 .message.deleted .message-footer .tick-icon { display: none; }
 
 /* ===== Swipe-to-reply indicator ===== */
-.message { position: relative; }
+.message { position: relative; overflow: visible; }
+
+/* Extend hover area so mouse can reach the side emoji picker */
+@media (min-width: 769px) {
+  .message::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 220px;
+    pointer-events: auto;
+  }
+  .message.sent::before { right: 100%; }
+  .message.received::before { left: 100%; }
+}
 
 /* ===== Call event messages — centered in chat ===== */
 .call-event-msg {

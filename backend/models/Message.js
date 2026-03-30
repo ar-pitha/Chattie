@@ -62,6 +62,14 @@ const messageSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  // Emoji reactions — [{emoji: '❤️', users: ['alice', 'bob']}]
+  reactions: {
+    type: [{
+      emoji: { type: String, required: true },
+      users: { type: [String], default: [] }
+    }],
+    default: []
+  },
   // Call event message support
   callEvent: {
     type: {

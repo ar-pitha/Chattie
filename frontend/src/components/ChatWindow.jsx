@@ -22,6 +22,7 @@ import {
   emitClearUnreadCount,
   onMessageEdited,
   onMessagePinned,
+  onReactionUpdated,
 } from "../utils/socket";
 import MessageActions from "./MessageActions";
 import CallScreen from "./CallScreen";
@@ -115,6 +116,9 @@ const ChatWindow = ({
   const [starredMessages, setStarredMessages] = useState([]);
   const [swipingMsgId, setSwipingMsgId] = useState(null);
   const [swipeX, setSwipeX] = useState(0);
+  const [hoveredMsgId, setHoveredMsgId] = useState(null);
+  const [emojiPickerMsgId, setEmojiPickerMsgId] = useState(null);
+  const hoverTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const touchRef = useRef({
@@ -177,6 +181,11 @@ const ChatWindow = ({
       if (t.isSwiping && swipeX > 50) {
         // Swipe threshold reached — trigger reply
         handleReplyClick(msg);
+      } else if (!t.longPressed && !t.isSwiping && Date.now() - t.startTime < 300) {
+        // Quick tap — always open emoji picker on mobile
+        if (msg.deletedForAll) return;
+        setEmojiPickerMsgId(msg._id);
+        setActiveMessageId(null);
       }
 
       setSwipingMsgId(null);
@@ -442,6 +451,33 @@ const ChatWindow = ({
     });
   }, [setMessages]);
 
+  // Listen for reaction updates
+  useEffect(() => {
+    return onReactionUpdated((d) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          String(m._id) === String(d.messageId)
+            ? { ...m, reactions: d.reactions }
+            : m,
+        ),
+      );
+    });
+  }, [setMessages]);
+
+  // Dismiss emoji picker / actions when tapping outside on mobile
+  useEffect(() => {
+    if (!isMobileDevice) return;
+    const handler = (e) => {
+      // If tap is outside any .message, close everything
+      if (!e.target.closest('.message')) {
+        setEmojiPickerMsgId(null);
+        setActiveMessageId(null);
+      }
+    };
+    document.addEventListener('touchstart', handler);
+    return () => document.removeEventListener('touchstart', handler);
+  }, [isMobileDevice]);
+
   // Fetch pinned messages when chat opens
   useEffect(() => {
     if (selectedUser) {
@@ -554,6 +590,16 @@ const ChatWindow = ({
 
   const handlePinToggle = (messageId) => {
     // UI update happens via socket event (onMessagePinned)
+  };
+
+  const handleReaction = (messageId, reactions) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        String(m._id) === String(messageId)
+          ? { ...m, reactions }
+          : m,
+      ),
+    );
   };
 
   const openPanel = async (panel) => {
@@ -1143,12 +1189,23 @@ const ChatWindow = ({
                     key={item.key}
                     data-msgid={msg._id}
                     className={`message ${isSent ? "sent" : "received"} ${msg.deletedForAll ? "deleted" : ""} ${highlightedMessageId === msg._id ? "highlighted" : ""} ${msg.pinned ? "pinned-msg" : ""}`}
-                    onClick={() => {
+                    onClick={(e) => {
                       if (msg.deletedForAll) return;
-                      if (isMobileDevice) return; // mobile uses long press
+                      if (isMobileDevice) return;
+                      e.stopPropagation();
                       setActiveMessageId(
                         activeMessageId === msg._id ? null : msg._id,
                       );
+                    }}
+                    onMouseEnter={() => {
+                      if (!isMobileDevice && !msg.deletedForAll && !msg.callEvent) {
+                        clearTimeout(hoverTimeoutRef.current);
+                        setHoveredMsgId(msg._id);
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      if (isMobileDevice) return;
+                      hoverTimeoutRef.current = setTimeout(() => setHoveredMsgId(null), 300);
                     }}
                     onTouchStart={(e) =>
                       !msg.deletedForAll && handleTouchStart(e, msg._id)
@@ -1255,6 +1312,57 @@ const ChatWindow = ({
                             </span>
                           )}
                         </div>
+                      </div>
+                    )}
+                    {msg.reactions && msg.reactions.length > 0 && !msg.deletedForAll && (
+                      <div
+                        className="reaction-badges-inline"
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onTouchEnd={(e) => e.stopPropagation()}
+                      >
+                        {msg.reactions.map((r) => (
+                          <span
+                            key={r.emoji}
+                            className={`reaction-pill ${r.users?.includes(currentUser.username) ? 'own' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              chatAPI.toggleReaction(msg._id, r.emoji, currentUser.username).then((res) => {
+                                handleReaction(msg._id, res.data.reactions);
+                              });
+                            }}
+                          >
+                            {r.emoji}{r.users.length > 1 ? r.users.length : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {/* Hover emoji picker (desktop) or tap emoji picker (mobile) */}
+                    {((!isMobileDevice && hoveredMsgId === msg._id) || (isMobileDevice && emojiPickerMsgId === msg._id)) &&
+                      !msg.deletedForAll && !msg.callEvent &&
+                      activeMessageId !== msg._id && (
+                      <div
+                        className={`hover-emoji-picker ${isSent ? 'sent' : 'received'}`}
+                        onClick={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onTouchEnd={(e) => e.stopPropagation()}
+                        onMouseEnter={() => clearTimeout(hoverTimeoutRef.current)}
+                        onMouseLeave={() => { hoverTimeoutRef.current = setTimeout(() => setHoveredMsgId(null), 300); }}
+                      >
+                        {['👍', '❤️', '😂', '😢', '😮', '🔥'].map((emoji) => (
+                          <button
+                            key={emoji}
+                            className={`hover-emoji-btn ${msg.reactions?.find(r => r.emoji === emoji && r.users?.includes(currentUser.username)) ? 'active' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              chatAPI.toggleReaction(msg._id, emoji, currentUser.username).then((res) => {
+                                handleReaction(msg._id, res.data.reactions);
+                              });
+                              setEmojiPickerMsgId(null);
+                            }}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
                       </div>
                     )}
                     {activeMessageId === msg._id &&

@@ -76,6 +76,9 @@ export const chatAPI = {
   togglePin: (messageId, username) =>
     axios.post(`${API_BASE_URL}/chat/messages/${messageId}/pin`, { username }),
 
+  toggleReaction: (messageId, emoji, username) =>
+    axios.post(`${API_BASE_URL}/chat/messages/${messageId}/reaction`, { emoji, username }),
+
   getPinnedMessages: (user1, user2) =>
     axios.get(`${API_BASE_URL}/chat/pinned`, { params: { user1, user2 } }),
 
