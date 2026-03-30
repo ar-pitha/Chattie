@@ -13,6 +13,7 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
   const [mediaMenuOpen, setMediaMenuOpen] = useState(false);
   const typingTimeoutRef = React.useRef(null);
   const inputRef = useRef(null);
+  const isSendingRef = useRef(false);
   const photoRef = useRef(null);
   const videoRef = useRef(null);
   const docRef = useRef(null);
@@ -98,12 +99,14 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
       sender: replyingTo.sender
     } : null;
 
-    setText('');
+    // Prevent keyboard from closing during send
+    isSendingRef.current = true;
+    // Clear textarea value via DOM first to avoid re-render losing focus
     if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
-      // Immediately refocus to prevent mobile keyboard from closing
-      inputRef.current.focus();
+      inputRef.current.value = '';
+      inputRef.current.style.height = '44px';
     }
+    setText('');
     setIsTyping(false);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     emitStopTyping(currentUser.username, selectedUser.username);
@@ -139,6 +142,7 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
       setText(messageText);
     } finally {
       setLoading(false);
+      isSendingRef.current = false;
       requestAnimationFrame(() => {
         inputRef.current?.focus();
       });
@@ -272,8 +276,8 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
             autoComplete="off"
             inputMode="text"
             onBlur={(e) => {
-              // Prevent keyboard from closing when tapping send button on mobile
-              if (e.relatedTarget?.closest('.send-btn')) {
+              // Prevent keyboard from closing when sending or tapping send button
+              if (isSendingRef.current || e.relatedTarget?.closest('.send-btn')) {
                 e.preventDefault();
                 inputRef.current?.focus();
               }

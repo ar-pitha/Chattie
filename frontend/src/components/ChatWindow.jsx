@@ -244,7 +244,10 @@ const ChatWindow = ({
   }, [handleScroll]);
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, []);
 
   const scrollToReplyOriginal = useCallback((replyToMessageId) => {
@@ -504,7 +507,10 @@ const ChatWindow = ({
   }, [selectedUser?.username, currentUser.username]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [messages]);
 
   const fetchMessages = async () => {
@@ -545,10 +551,10 @@ const ChatWindow = ({
         emitMessageSeen(msg._id, currentUser.username, msg.sender);
       });
 
-      setTimeout(
-        () => messagesEndRef.current?.scrollIntoView({ behavior: "auto" }),
-        50,
-      );
+      setTimeout(() => {
+        const container = messagesContainerRef.current;
+        if (container) container.scrollTop = container.scrollHeight;
+      }, 50);
     } catch (error) {
       console.error("Error fetching messages:", error);
     } finally {
