@@ -78,8 +78,8 @@ exports.sendNotificationByUsername = async (req, res) => {
     try {
       const message = {
         notification: {
-          title: `Message from ${sendersUsername}`,
-          body: messageText
+          title: 'Chattie',
+          body: 'Hey! You got a new message'
         },
         token: receiver.fcm_token
       };

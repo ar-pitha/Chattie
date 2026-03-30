@@ -296,7 +296,7 @@ const ChatPage = ({ currentUser, onLogout, onCurrentUserUpdate }) => {
             </div>
           ) : (
             <>
-              <ChatWindow currentUser={currentUser} selectedUser={selectedUser} messages={messages} setMessages={setMessages} onReply={handleReply} onEdit={handleEdit} unreadCounts={unreadCounts} onClearUnread={handleClearUnread} onBack={handleBack} scrollTrigger={scrollTrigger} onMessageDeletedForAll={(otherUsername) => {
+              <ChatWindow currentUser={currentUser} selectedUser={selectedUser} messages={messages} setMessages={setMessages} onReply={handleReply} onEdit={handleEdit} unreadCounts={unreadCounts} onClearUnread={handleClearUnread} onBack={handleBack} scrollTrigger={scrollTrigger} replyingTo={replyingTo} onMessageDeletedForAll={(otherUsername) => {
                 setLastMessages((prev) => {
                   if (!prev[otherUsername]) return prev;
                   return { ...prev, [otherUsername]: { ...prev[otherUsername], text: 'This message was deleted', deletedForAll: true } };

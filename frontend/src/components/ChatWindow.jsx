@@ -103,6 +103,7 @@ const ChatWindow = ({
   onClearUnread,
   onBack,
   scrollTrigger,
+  replyingTo,
   onMessageDeletedForAll,
 }) => {
   const [loading, setLoading] = useState(false);
@@ -1220,7 +1221,7 @@ const ChatWindow = ({
                   >
                     {msg.media && msg.media.fileId && !msg.deletedForAll ? (
                       <>
-                        <MediaMessage message={msg} isOwn={isSent} />
+                        <MediaMessage message={msg} isOwn={isSent} onReply={handleReplyClick} replyingTo={replyingTo} />
                         <div
                           className="message-footer"
                           style={{ paddingLeft: "12px", marginTop: "4px" }}

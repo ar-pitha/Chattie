@@ -18,16 +18,9 @@ self.addEventListener('push', function (event) {
     const notificationData = event.data.json();
     console.log('📨 Notification data:', notificationData);
 
-    // Extract title and body from different possible locations
-    const title = 
-      notificationData.notification?.title || 
-      notificationData.title || 
-      'New Message';
-    
-    const body = 
-      notificationData.notification?.body || 
-      notificationData.body || 
-      'You have a new message';
+    // Privacy-first: always show generic notification without sender name or message content
+    const title = 'Chattie';
+    const body = 'Hey! You got something new, open the app to check it out!';
 
     const options = {
       body: body,

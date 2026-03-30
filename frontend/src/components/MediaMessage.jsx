@@ -1,11 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 
-const MediaMessage = ({ message, isOwn }) => {
+const MediaMessage = ({ message, isOwn, onReply, replyingTo }) => {
   if (!message.media) return null;
 
   const [isDownloading, setIsDownloading] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const retryTimerRef = useRef(null);
+  const wrapperRef = useRef(null);
   const { mediaType, fileId, fileName, fileSizeKB, mimeType } = message.media;
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -65,28 +68,49 @@ const MediaMessage = ({ message, isOwn }) => {
     window.open(fullMediaUrl, '_blank', 'noopener,noreferrer');
   };
 
-  const openVideoFullscreen = (e) => {
+  const openLightbox = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const videoLink = document.createElement('a');
-    videoLink.href = fullMediaUrl;
-    videoLink.target = '_blank';
-    videoLink.rel = 'noopener noreferrer';
-    videoLink.click();
+    setLightboxOpen(true);
+    onReply?.(message);
   };
+
+  const closeLightbox = useCallback((e) => {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    setLightboxOpen(false);
+  }, []);
+
+  // Auto-close viewer when reply is sent (replyingTo becomes null)
+  useEffect(() => {
+    if (lightboxOpen && !replyingTo) {
+      setLightboxOpen(false);
+    }
+  }, [replyingTo, lightboxOpen]);
+
+  // Close lightbox on Escape key
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const handleKey = (e) => { if (e.key === 'Escape') closeLightbox(); };
+    document.addEventListener('keydown', handleKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleKey);
+      document.body.style.overflow = '';
+    };
+  }, [lightboxOpen, closeLightbox]);
 
   const renderMedia = () => {
     switch (mediaType) {
       case 'photo':
         return (
-          <div className="media-thumbnail">
+          <div className="media-thumbnail" onClick={openLightbox} style={{ cursor: 'pointer' }}>
             <img
               src={fullMediaUrl}
               alt="Photo"
               className="photo-preview"
               onError={handleMediaError}
             />
-            <button 
+            <button
               className="media-download-btn"
               onClick={downloadMedia}
               disabled={isDownloading}
@@ -105,42 +129,22 @@ const MediaMessage = ({ message, isOwn }) => {
 
       case 'video':
         return (
-          <div className="media-video-container">
+          <div className="media-video-container" onClick={openLightbox} style={{ cursor: 'pointer' }}>
             <video
               width="100%"
               height="auto"
-              controls
               className="video-preview"
               preload="metadata"
+              muted
               onError={handleMediaError}
             >
               <source src={fullMediaUrl} type={mimeType} />
-              Your browser does not support the video tag.
             </video>
-            <button 
-              className="video-play-btn"
-              onClick={openVideoFullscreen}
-              title="Play in fullscreen"
-              aria-label="Play video in fullscreen"
-            >
+            <div className="video-play-btn">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
                 <polygon points="5 3 19 12 5 21 5 3"/>
               </svg>
-            </button>
-            <button 
-              className="media-download-btn video-download"
-              onClick={downloadMedia}
-              disabled={isDownloading}
-              title="Download video"
-              aria-label="Download video"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              {isDownloading ? 'Downloading...' : 'Download'}
-            </button>
+            </div>
           </div>
         );
 
@@ -205,14 +209,67 @@ const MediaMessage = ({ message, isOwn }) => {
   };
 
   return (
-    <div className={`media-wrapper ${isOwn ? 'own' : 'other'}`}>
-      <div className="media-content">
-        {renderMedia()}
-        {message.text && message.text !== `📎 ${fileName}` && (
-          <div className="media-caption">{message.text}</div>
-        )}
+    <>
+      <div ref={wrapperRef} className={`media-wrapper ${isOwn ? 'own' : 'other'}`}>
+        <div className="media-content">
+          {renderMedia()}
+          {message.text && message.text !== `📎 ${fileName}` && (
+            <div className="media-caption">{message.text}</div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* In-chat media viewer — portaled into .chat-window, sits below the chat header */}
+      {lightboxOpen && ReactDOM.createPortal(
+        <div className="media-viewer-overlay">
+          {/* Close button */}
+          <button className="media-viewer-close" onClick={closeLightbox} aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+
+          {/* Media content centered */}
+          <div className="media-viewer-body">
+            <div className="media-viewer-content">
+              {mediaType === 'photo' && (
+                <img src={fullMediaUrl} alt="Photo" className="media-viewer-image" />
+              )}
+              {mediaType === 'video' && (
+                <video
+                  src={fullMediaUrl}
+                  controls
+                  autoPlay
+                  className="media-viewer-video"
+                />
+              )}
+            </div>
+
+            {/* Caption text below media */}
+            {message.text && message.text !== `📎 ${fileName}` && (
+              <div className="media-viewer-caption">{message.text}</div>
+            )}
+
+            {/* Action button */}
+            <div className="media-viewer-actions">
+              <button
+                className="media-viewer-action-btn"
+                onClick={downloadMedia}
+                disabled={isDownloading}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="24" height="24">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span>{isDownloading ? 'Downloading...' : 'Download'}</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        wrapperRef.current?.closest('.chat-window') || document.body
+      )}
+    </>
   );
 };
 
