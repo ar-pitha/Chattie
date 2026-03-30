@@ -99,7 +99,11 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
     } : null;
 
     setText('');
-    if (inputRef.current) inputRef.current.style.height = 'auto';
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      // Immediately refocus to prevent mobile keyboard from closing
+      inputRef.current.focus();
+    }
     setIsTyping(false);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     emitStopTyping(currentUser.username, selectedUser.username);
@@ -135,7 +139,9 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
       setText(messageText);
     } finally {
       setLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 0);
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
     }
   };
 
@@ -264,6 +270,14 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
               }
             }}
             autoComplete="off"
+            inputMode="text"
+            onBlur={(e) => {
+              // Prevent keyboard from closing when tapping send button on mobile
+              if (e.relatedTarget?.closest('.send-btn')) {
+                e.preventDefault();
+                inputRef.current?.focus();
+              }
+            }}
           />
         </div>
         <button type="submit" className="send-btn" disabled={loading || !text.trim()} aria-label="Send message" onTouchStart={(e) => { e.preventDefault(); inputRef.current?.focus(); if (text.trim()) handleSendMessage(e); }}>
