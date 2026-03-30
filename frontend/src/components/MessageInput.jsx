@@ -280,7 +280,7 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
             }}
           />
         </div>
-        <button type="submit" className="send-btn" disabled={loading || !text.trim()} aria-label="Send message" onTouchStart={(e) => { e.preventDefault(); inputRef.current?.focus(); if (text.trim()) handleSendMessage(e); }}>
+        <button type="submit" className="send-btn" disabled={loading || !text.trim()} aria-label="Send message" onMouseDown={(e) => e.preventDefault()} onTouchStart={(e) => { e.preventDefault(); inputRef.current?.focus(); if (text.trim()) handleSendMessage(e); }}>
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="#6C63FF"/>
           </svg>
