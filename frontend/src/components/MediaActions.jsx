@@ -11,6 +11,8 @@ const MediaActions = ({ onPhotoSelect, onVideoSelect, onDocumentSelect, isLoadin
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        // Don't close if clicking inside the media popup panel (rendered outside this wrapper)
+        if (e.target.closest('.media-popup-panel')) return;
         setShowMenu(false);
       }
     };

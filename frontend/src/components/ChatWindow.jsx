@@ -106,11 +106,16 @@ const ChatWindow = ({
   replyingTo,
   onMessageDeletedForAll,
   onReactionToMyMessage,
+  onTypingChange,
 }) => {
   const [loading, setLoading] = useState(false);
   const [activeMessageId, setActiveMessageId] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+
+  useEffect(() => {
+    onTypingChange?.(isTyping);
+  }, [isTyping]);
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [showMenu, setShowMenu] = useState(false);
@@ -123,6 +128,7 @@ const ChatWindow = ({
   const hoverTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const prevMsgCountRef = useRef(0);
   const touchRef = useRef({
     startX: 0,
     startY: 0,
@@ -507,10 +513,15 @@ const ChatWindow = ({
   }, [selectedUser?.username, currentUser.username]);
 
   useEffect(() => {
-    const container = messagesContainerRef.current;
-    if (container) {
-      container.scrollTop = container.scrollHeight;
+    const newCount = messages.length;
+    // Only auto-scroll when a new message arrives (count increases), not on reactions/star/pin/delete
+    if (newCount > prevMsgCountRef.current) {
+      const container = messagesContainerRef.current;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
     }
+    prevMsgCountRef.current = newCount;
   }, [messages]);
 
   const fetchMessages = async () => {
@@ -677,6 +688,10 @@ const ChatWindow = ({
     if (selectedUser.isOnline) startCall("video");
     else alert(`${selectedUser.username} is offline`);
   };
+
+  const allMediaMessages = useMemo(() =>
+    messages.filter(m => m.media && m.media.fileId && !m.deletedForAll),
+  [messages]);
 
   const groupedMessages = useMemo(() => {
     const groups = [];
@@ -948,16 +963,7 @@ const ChatWindow = ({
           </div>
           <div className="header-info">
             <h2>{selectedUser.username}</h2>
-            {isTyping ? (
-              <div className="typing-indicator">
-                <span className="typing-indicator-text">typing</span>
-                <div className="typing-dots-header">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </div>
-            ) : selectedUser.isOnline ? (
+            {selectedUser.isOnline ? (
               <div className="header-status online">online</div>
             ) : null}
           </div>
@@ -1261,7 +1267,7 @@ const ChatWindow = ({
                   >
                     {msg.media && msg.media.fileId && !msg.deletedForAll ? (
                       <>
-                        <MediaMessage message={msg} isOwn={isSent} onReply={handleReplyClick} replyingTo={replyingTo} />
+                        <MediaMessage message={msg} isOwn={isSent} onReply={handleReplyClick} replyingTo={replyingTo} allMedia={allMediaMessages} />
                         <div
                           className="message-footer"
                           style={{ paddingLeft: "12px", marginTop: "4px" }}
@@ -1439,16 +1445,14 @@ const ChatWindow = ({
                   </div>
                 );
               })}
-              {isTyping && (
-                <div className="typing-bubble">
-                  <div className="typing-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                </div>
-              )}
             </>
+          )}
+          {isTyping && (
+              <div className="typing-dots-chat">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
           )}
           <div ref={messagesEndRef} />
         </div>

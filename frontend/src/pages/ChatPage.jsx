@@ -42,6 +42,7 @@ const ChatPage = ({ currentUser, onLogout, onCurrentUserUpdate }) => {
 
   const handleReply = useCallback((msg) => setReplyingTo(msg), []);
   const [editingMessage, setEditingMessage] = useState(null);
+  const [peerTyping, setPeerTyping] = useState(false);
   const handleEdit = useCallback((msg) => setEditingMessage(msg), []);
 
   const handleSelectUser = useCallback((user) => {
@@ -334,7 +335,7 @@ const ChatPage = ({ currentUser, onLogout, onCurrentUserUpdate }) => {
             </div>
           ) : (
             <>
-              <ChatWindow currentUser={currentUser} selectedUser={selectedUser} messages={messages} setMessages={setMessages} onReply={handleReply} onEdit={handleEdit} unreadCounts={unreadCounts} onClearUnread={handleClearUnread} onBack={handleBack} scrollTrigger={scrollTrigger} replyingTo={replyingTo} onReactionToMyMessage={showReactionNotif} onMessageDeletedForAll={(otherUsername) => {
+              <ChatWindow currentUser={currentUser} selectedUser={selectedUser} messages={messages} setMessages={setMessages} onReply={handleReply} onEdit={handleEdit} unreadCounts={unreadCounts} onClearUnread={handleClearUnread} onBack={handleBack} scrollTrigger={scrollTrigger} replyingTo={replyingTo} onReactionToMyMessage={showReactionNotif} onTypingChange={setPeerTyping} onMessageDeletedForAll={(otherUsername) => {
                 setLastMessages((prev) => {
                   if (!prev[otherUsername]) return prev;
                   return { ...prev, [otherUsername]: { ...prev[otherUsername], text: 'This message was deleted', deletedForAll: true } };
