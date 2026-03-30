@@ -15,5 +15,7 @@ router.get('/starred/:username', chatController.getStarredMessages);
 router.get('/pinned', chatController.getPinnedMessages);
 router.post('/call-event', chatController.saveCallEvent);
 router.delete('/messages/:messageId', chatController.deleteMessage);
+router.get('/unseen-reactions/:username', chatController.getUnseenReactions);
+router.post('/reactions/mark-seen', chatController.markReactionsSeen);
 
 module.exports = router;

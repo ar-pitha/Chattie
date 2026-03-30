@@ -79,6 +79,12 @@ export const chatAPI = {
   toggleReaction: (messageId, emoji, username) =>
     axios.post(`${API_BASE_URL}/chat/messages/${messageId}/reaction`, { emoji, username }),
 
+  getUnseenReactions: (username) =>
+    axios.get(`${API_BASE_URL}/chat/unseen-reactions/${username}`),
+
+  markReactionsSeen: (username, otherUser) =>
+    axios.post(`${API_BASE_URL}/chat/reactions/mark-seen`, { username, otherUser }),
+
   getPinnedMessages: (user1, user2) =>
     axios.get(`${API_BASE_URL}/chat/pinned`, { params: { user1, user2 } }),
 

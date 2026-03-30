@@ -10,7 +10,7 @@ const DefaultAvatar = () => (
   </svg>
 );
 
-const Sidebar = ({ currentUser, selectedUser, onSelectUser, users, setUsers, unreadCounts, typingUsers, lastMessageTimes, lastMessages, onSettingsOpen, onLogout, onProfilePicUpdate }) => {
+const Sidebar = ({ currentUser, selectedUser, onSelectUser, users, setUsers, unreadCounts, typingUsers, lastMessageTimes, lastMessages, reactionNotifs, onSettingsOpen, onLogout, onProfilePicUpdate }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [profilePicModalOpen, setProfilePicModalOpen] = useState(false);
   const [viewingUserPic, setViewingUserPic] = useState(null);
@@ -145,6 +145,10 @@ const Sidebar = ({ currentUser, selectedUser, onSelectUser, users, setUsers, unr
                   <div className="user-item-bottom">
                     {isUserTyping ? (
                       <span className="user-typing-text">typing...</span>
+                    ) : reactionNotifs?.[user.username] ? (
+                      <span className="user-reaction-text">
+                        reacted {reactionNotifs[user.username].emoji} to: <span className="user-reaction-msg">{reactionNotifs[user.username].text}</span>
+                      </span>
                     ) : lastMessages?.[user.username] ? (
                       <span className={`user-last-message${lastMessages[user.username].deletedForAll ? ' deleted-preview' : ''}`}>
                         {lastMessages[user.username].deletedForAll ? (
@@ -164,7 +168,7 @@ const Sidebar = ({ currentUser, selectedUser, onSelectUser, users, setUsers, unr
                               }
                               return <svg className="sidebar-tick" viewBox="0 0 16 15" width="16" height="15" fill="#b5b3c7"><path d="M10.91 3.316l-.478-.372a.365.365 0 0 0-.51.063L4.566 9.879a.32.32 0 0 1-.484.033L1.891 7.769a.366.366 0 0 0-.515.006l-.423.433a.364.364 0 0 0 .006.514l3.258 3.185c.143.14.361.125.484-.033l6.272-8.048a.365.365 0 0 0-.063-.51z"/></svg>;
                             })()}
-                            {lastMessages[user.username].text}
+                            <span className="sidebar-msg-text">{lastMessages[user.username].text}</span>
                           </>
                         )}
                       </span>

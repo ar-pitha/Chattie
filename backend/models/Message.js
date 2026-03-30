@@ -70,6 +70,11 @@ const messageSchema = new mongoose.Schema({
     }],
     default: []
   },
+  // Track who has seen the reactions (for sidebar notification)
+  reactionSeenBy: {
+    type: [String],
+    default: []
+  },
   // Call event message support
   callEvent: {
     type: {

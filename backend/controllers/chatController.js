@@ -27,6 +27,7 @@ exports.getLastMessages = async (req, res) => {
       { $sort: { timestamp: -1 } },
       { $group: {
         _id: '$conversationWith',
+        msgId: { $first: '$_id' },
         text: { $first: '$text' },
         sender: { $first: '$sender' },
         timestamp: { $first: '$timestamp' },
@@ -36,10 +37,10 @@ exports.getLastMessages = async (req, res) => {
       }}
     ]);
 
-    // Convert to { username: { text, sender, timestamp, status, media, deletedForAll } }
+    // Convert to { username: { _id, text, sender, timestamp, status, media, deletedForAll } }
     const result = {};
     lastMessages.forEach(m => {
-      result[m._id] = { text: m.text, sender: m.sender, timestamp: m.timestamp, status: m.status, media: m.media || null, deletedForAll: m.deletedForAll || false };
+      result[m._id] = { _id: m.msgId, text: m.text, sender: m.sender, timestamp: m.timestamp, status: m.status, media: m.media || null, deletedForAll: m.deletedForAll || false };
     });
 
     res.json(result);
@@ -79,8 +80,9 @@ exports.getMessages = async (req, res) => {
       ]
     }).sort({ timestamp: 1 });
 
-    const filteredMessages = messages.map(msg => {
-      const msgObj = {
+    const filteredMessages = messages
+      .filter(msg => !(msg.deletedFor && msg.deletedFor.includes(sender)))
+      .map(msg => ({
         _id: msg._id,
         sender: msg.sender,
         receiver: msg.receiver,
@@ -98,15 +100,7 @@ exports.getMessages = async (req, res) => {
         pinnedBy: msg.pinnedBy || null,
         callEvent: msg.callEvent || null,
         reactions: msg.reactions || []
-      };
-
-      if (msg.deletedFor && msg.deletedFor.includes(sender)) {
-        msgObj.text = '[Deleted message]';
-        msgObj.deletedForMe = true;
-      }
-
-      return msgObj;
-    });
+      }));
 
     res.status(200).json(filteredMessages);
   } catch (error) {
@@ -440,13 +434,18 @@ exports.toggleReaction = async (req, res) => {
         message.reactions.push({ emoji, users: [username] });
       }
       added = true;
+
+      // Mark reaction as unseen by the message sender (for sidebar notification)
+      if (message.sender !== username) {
+        message.reactionSeenBy = message.reactionSeenBy.filter(u => u !== message.sender);
+      }
     }
 
     await message.save();
 
     // Notify both users in real-time
     if (io) {
-      const reactionData = { messageId, emoji, username, added, reactions: message.reactions };
+      const reactionData = { messageId, emoji, username, added, reactions: message.reactions, messageSender: message.sender, messageReceiver: message.receiver, messageText: message.text };
       io.to(`user_${message.sender}`).emit('reaction_updated', reactionData);
       io.to(`user_${message.receiver}`).emit('reaction_updated', reactionData);
       const senderSid = connectedUsers?.[message.sender];
@@ -458,6 +457,58 @@ exports.toggleReaction = async (req, res) => {
     res.status(200).json({ message: added ? 'Reaction added' : 'Reaction removed', reactions: message.reactions });
   } catch (error) {
     res.status(500).json({ message: 'Error toggling reaction', error: error.message });
+  }
+};
+
+// Get unseen reaction notifications for a user (for sidebar on page load)
+exports.getUnseenReactions = async (req, res) => {
+  try {
+    const { username } = req.params;
+    // Find messages sent by this user that have reactions and the user hasn't seen them
+    const messages = await Message.find({
+      sender: username,
+      'reactions.0': { $exists: true },
+      reactionSeenBy: { $ne: username },
+      deletedForAll: { $ne: true }
+    }).sort({ timestamp: -1 });
+
+    // Group by conversation partner (receiver) — pick the most recent per partner
+    const notifs = {};
+    for (const msg of messages) {
+      if (notifs[msg.receiver]) continue;
+      // Get the latest reaction emoji (last reactor who isn't the sender)
+      const lastReaction = msg.reactions[msg.reactions.length - 1];
+      if (lastReaction) {
+        const reactor = lastReaction.users.find(u => u !== username) || lastReaction.users[0];
+        notifs[msg.receiver] = {
+          emoji: lastReaction.emoji,
+          text: msg.text,
+          reactor
+        };
+      }
+    }
+    res.json(notifs);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Mark reactions as seen for a conversation
+exports.markReactionsSeen = async (req, res) => {
+  try {
+    const { username, otherUser } = req.body;
+    await Message.updateMany(
+      {
+        sender: username,
+        receiver: otherUser,
+        'reactions.0': { $exists: true },
+        reactionSeenBy: { $ne: username }
+      },
+      { $addToSet: { reactionSeenBy: username } }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 

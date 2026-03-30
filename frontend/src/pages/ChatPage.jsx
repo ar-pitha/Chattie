@@ -5,7 +5,7 @@ import MessageInput from '../components/MessageInput';
 import AppLockModal from '../components/AppLockModal';
 import Settings from '../components/Settings';
 import { authAPI, usersAPI, chatAPI } from '../utils/api';
-import { disconnectSocket, emitUserLogout, initializeSocket, emitUserJoin, onUnreadCountUpdated, onUnreadCountCleared, emitClearUnreadCount, onUserOnline, onUserOffline, onTypingIndicator, onStopTyping, emitUserAway, emitUserBack, onReceiveMessage, onSocketConnect, onMessageStatusUpdated, onDeleteMessage, getSocket } from '../utils/socket';
+import { disconnectSocket, emitUserLogout, initializeSocket, emitUserJoin, onUnreadCountUpdated, onUnreadCountCleared, emitClearUnreadCount, onUserOnline, onUserOffline, onTypingIndicator, onStopTyping, emitUserAway, emitUserBack, onReceiveMessage, onSocketConnect, onMessageStatusUpdated, onDeleteMessage, onReactionUpdated, getSocket } from '../utils/socket';
 import { setupForegroundNotifications, requestFCMToken, registerServiceWorker } from '../utils/firebase';
 import { useAppSecurity, setAppLockSession, wasAppLocked } from '../utils/security';
 import '../styles/ChatPage.css';
@@ -21,6 +21,8 @@ const ChatPage = ({ currentUser, onLogout, onCurrentUserUpdate }) => {
   const [unreadCounts, setUnreadCounts] = useState({});
   // Track who is typing (for sidebar display)
   const [typingUsers, setTypingUsers] = useState({});
+  // Track reaction notifications per user: { username: { emoji } }
+  const [reactionNotifs, setReactionNotifs] = useState({});
   // Track last message per user for sidebar display and sorting
   // { username: { text, sender, timestamp, status } }
   const [lastMessages, setLastMessages] = useState({});
@@ -46,7 +48,15 @@ const ChatPage = ({ currentUser, onLogout, onCurrentUserUpdate }) => {
     setSelectedUser(user);
     setReplyingTo(null);
     setEditingMessage(null);
-  }, []);
+    // Clear reaction notification and mark as seen in DB
+    setReactionNotifs((prev) => {
+      if (!prev[user.username]) return prev;
+      chatAPI.markReactionsSeen(currentUser.username, user.username).catch(() => {});
+      const u = { ...prev };
+      delete u[user.username];
+      return u;
+    });
+  }, [currentUser.username]);
 
   const handleBack = useCallback(() => { setSelectedUser(null); setReplyingTo(null); setEditingMessage(null); }, []);
 
@@ -132,6 +142,19 @@ const ChatPage = ({ currentUser, onLogout, onCurrentUserUpdate }) => {
     if (currentUser.username) {
       chatAPI.getLastMessages(currentUser.username)
         .then(r => setLastMessages(r.data || {}))
+        .catch(() => {});
+      // Fetch unseen reaction notifications
+      chatAPI.getUnseenReactions(currentUser.username)
+        .then(r => {
+          const notifs = {};
+          const data = r.data || {};
+          Object.entries(data).forEach(([otherUser, info]) => {
+            notifs[otherUser] = { emoji: info.emoji, text: info.text };
+          });
+          if (Object.keys(notifs).length > 0) {
+            setReactionNotifs(prev => ({ ...notifs, ...prev }));
+          }
+        })
         .catch(() => {});
     }
     if (currentUser._id) {
@@ -225,6 +248,21 @@ const ChatPage = ({ currentUser, onLogout, onCurrentUserUpdate }) => {
     });
   }, [currentUser.username]);
 
+  // Update sidebar lastMessages reactions + show "reacted to your message" notification
+  const showReactionNotif = useCallback((reactorUsername, emoji, msgText) => {
+    setReactionNotifs((prev) => ({ ...prev, [reactorUsername]: { emoji, text: msgText } }));
+  }, []);
+
+  useEffect(() => {
+    return onReactionUpdated((d) => {
+      // Show "reacted [emoji] to: message" notification in sidebar
+      // Fallback for when the reacted chat isn't currently open in ChatWindow
+      if (d.added && d.messageSender === currentUser.username && d.username !== currentUser.username) {
+        showReactionNotif(d.username, d.emoji, d.messageText || '');
+      }
+    });
+  }, [currentUser.username, showReactionNotif]);
+
   // Unread count socket listeners — single source of truth from backend
   useEffect(() => {
     const u1 = onUnreadCountUpdated((d) => {
@@ -281,11 +319,11 @@ const ChatPage = ({ currentUser, onLogout, onCurrentUserUpdate }) => {
               </div>
               {/* Desktop-only: keep sidebar visible */}
               <div className="settings-desktop-sidebar">
-                <Sidebar currentUser={currentUser} selectedUser={selectedUser} onSelectUser={(user) => { setSettingsModalOpen(false); handleSelectUser(user); }} users={users} setUsers={setUsers} unreadCounts={unreadCounts} typingUsers={typingUsers} lastMessageTimes={lastMessageTimes} lastMessages={lastMessages} onSettingsOpen={() => setSettingsModalOpen(true)} onLogout={handleLogout} onProfilePicUpdate={handleProfilePicUpdate} />
+                <Sidebar currentUser={currentUser} selectedUser={selectedUser} onSelectUser={(user) => { setSettingsModalOpen(false); handleSelectUser(user); }} users={users} setUsers={setUsers} unreadCounts={unreadCounts} typingUsers={typingUsers} lastMessageTimes={lastMessageTimes} lastMessages={lastMessages} reactionNotifs={reactionNotifs} onSettingsOpen={() => setSettingsModalOpen(true)} onLogout={handleLogout} onProfilePicUpdate={handleProfilePicUpdate} />
               </div>
             </>
           ) : (
-            <Sidebar currentUser={currentUser} selectedUser={selectedUser} onSelectUser={handleSelectUser} users={users} setUsers={setUsers} unreadCounts={unreadCounts} typingUsers={typingUsers} lastMessageTimes={lastMessageTimes} lastMessages={lastMessages} onSettingsOpen={() => setSettingsModalOpen(true)} onLogout={handleLogout} onProfilePicUpdate={handleProfilePicUpdate} />
+            <Sidebar currentUser={currentUser} selectedUser={selectedUser} onSelectUser={handleSelectUser} users={users} setUsers={setUsers} unreadCounts={unreadCounts} typingUsers={typingUsers} lastMessageTimes={lastMessageTimes} lastMessages={lastMessages} reactionNotifs={reactionNotifs} onSettingsOpen={() => setSettingsModalOpen(true)} onLogout={handleLogout} onProfilePicUpdate={handleProfilePicUpdate} />
           )}
         </div>
         <div className="chat-panel">
@@ -296,7 +334,7 @@ const ChatPage = ({ currentUser, onLogout, onCurrentUserUpdate }) => {
             </div>
           ) : (
             <>
-              <ChatWindow currentUser={currentUser} selectedUser={selectedUser} messages={messages} setMessages={setMessages} onReply={handleReply} onEdit={handleEdit} unreadCounts={unreadCounts} onClearUnread={handleClearUnread} onBack={handleBack} scrollTrigger={scrollTrigger} replyingTo={replyingTo} onMessageDeletedForAll={(otherUsername) => {
+              <ChatWindow currentUser={currentUser} selectedUser={selectedUser} messages={messages} setMessages={setMessages} onReply={handleReply} onEdit={handleEdit} unreadCounts={unreadCounts} onClearUnread={handleClearUnread} onBack={handleBack} scrollTrigger={scrollTrigger} replyingTo={replyingTo} onReactionToMyMessage={showReactionNotif} onMessageDeletedForAll={(otherUsername) => {
                 setLastMessages((prev) => {
                   if (!prev[otherUsername]) return prev;
                   return { ...prev, [otherUsername]: { ...prev[otherUsername], text: 'This message was deleted', deletedForAll: true } };

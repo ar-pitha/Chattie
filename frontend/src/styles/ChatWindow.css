@@ -457,6 +457,15 @@
   line-height: 1;
 }
 
+/* ===== Pin indicator ===== */
+.pin-indicator {
+  color: var(--primary);
+  margin-right: 2px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+
 /* ===== Pinned message highlight ===== */
 .message.pinned-msg .message-bubble {
   border-left: 3px solid var(--primary);

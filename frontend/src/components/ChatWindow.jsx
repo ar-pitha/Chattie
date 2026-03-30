@@ -105,6 +105,7 @@ const ChatWindow = ({
   scrollTrigger,
   replyingTo,
   onMessageDeletedForAll,
+  onReactionToMyMessage,
 }) => {
   const [loading, setLoading] = useState(false);
   const [activeMessageId, setActiveMessageId] = useState(null);
@@ -366,14 +367,12 @@ const ChatWindow = ({
     );
   }, [setMessages]);
   useEffect(() => {
-    return onDeleteMessageForMe((d) =>
-      setMessages((p) =>
-        p.filter(
-          (m) =>
-            !(m._id === d.messageId && d.username !== currentUser.username),
-        ),
-      ),
-    );
+    return onDeleteMessageForMe((d) => {
+      // Only hide the message if the current user is the one who deleted it
+      if (d.username === currentUser.username) {
+        setMessages((p) => p.filter((m) => m._id !== d.messageId));
+      }
+    });
   }, [setMessages, currentUser.username]);
   const typingTimeoutRef = useRef(null);
   useEffect(() => {
@@ -452,9 +451,24 @@ const ChatWindow = ({
     });
   }, [setMessages]);
 
+  // Keep a ref to messages so socket callback can read current messages
+  const messagesRef = useRef(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
   // Listen for reaction updates
+  const onReactionToMyMessageRef = useRef(onReactionToMyMessage);
+  useEffect(() => { onReactionToMyMessageRef.current = onReactionToMyMessage; }, [onReactionToMyMessage]);
+
   useEffect(() => {
     return onReactionUpdated((d) => {
+      // Check ownership from the latest messages ref (not inside state updater)
+      if (d.added && d.username !== currentUser.username) {
+        const reactedMsg = messagesRef.current.find((m) => String(m._id) === String(d.messageId));
+        if (reactedMsg && reactedMsg.sender === currentUser.username) {
+          onReactionToMyMessageRef.current?.(d.username, d.emoji, reactedMsg.text);
+        }
+      }
+      // Update messages state
       setMessages((prev) =>
         prev.map((m) =>
           String(m._id) === String(d.messageId)
@@ -463,7 +477,7 @@ const ChatWindow = ({
         ),
       );
     });
-  }, [setMessages]);
+  }, [setMessages, currentUser.username]);
 
   // Dismiss emoji picker / actions when tapping outside on mobile
   useEffect(() => {
@@ -589,8 +603,28 @@ const ChatWindow = ({
     );
   };
 
-  const handlePinToggle = (messageId) => {
-    // UI update happens via socket event (onMessagePinned)
+  const handlePinToggle = (messageId, pinned) => {
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (String(m._id) !== String(messageId)) return m;
+        return {
+          ...m,
+          pinned,
+          pinnedBy: pinned ? currentUser.username : null,
+        };
+      }),
+    );
+    // Also update pinned messages panel
+    setPinnedMessages((prev) => {
+      if (!pinned) {
+        return prev.filter((p) => String(p._id) !== String(messageId));
+      }
+      const msg = messages.find((m) => String(m._id) === String(messageId));
+      if (msg && !prev.some((p) => String(p._id) === String(messageId))) {
+        return [msg, ...prev];
+      }
+      return prev;
+    });
   };
 
   const handleReaction = (messageId, reactions) => {
@@ -1226,6 +1260,13 @@ const ChatWindow = ({
                           className="message-footer"
                           style={{ paddingLeft: "12px", marginTop: "4px" }}
                         >
+                          {msg.pinned && (
+                            <span className="pin-indicator">
+                              <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" width="11" height="11">
+                                <path d="M17 4v7l2 3v2h-6v5l-1 1-1-1v-5H5v-2l2-3V4c0-1.1.9-2 2-2h6c1.1 0 2 .9 2 2z"/>
+                              </svg>
+                            </span>
+                          )}
                           {isStarred && (
                             <span className="star-indicator">&#9733;</span>
                           )}
@@ -1293,6 +1334,13 @@ const ChatWindow = ({
                           )}
                         </div>
                         <div className="message-footer">
+                          {msg.pinned && (
+                            <span className="pin-indicator">
+                              <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" width="11" height="11">
+                                <path d="M17 4v7l2 3v2h-6v5l-1 1-1-1v-5H5v-2l2-3V4c0-1.1.9-2 2-2h6c1.1 0 2 .9 2 2z"/>
+                              </svg>
+                            </span>
+                          )}
                           {isStarred && (
                             <span className="star-indicator">&#9733;</span>
                           )}

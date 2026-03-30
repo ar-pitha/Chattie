@@ -215,12 +215,19 @@
   color: var(--text-light);
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 3px;
+}
+
+.sidebar-msg-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 /* Darker last message when unread */
@@ -251,6 +258,30 @@
   font-size: 13px;
   color: var(--primary);
   font-weight: 500;
+}
+
+.user-reaction-text {
+  font-size: 13px;
+  color: var(--primary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.user-reaction-msg {
+  color: var(--text-light);
+  font-weight: 400;
+  font-style: italic;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 /* ===== Unread badge ===== */
