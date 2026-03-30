@@ -57,9 +57,11 @@
   box-sizing: border-box;
 }
 
-html, body {
-  height: 100%;
-  overflow: hidden;
+html, body, #root {
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden !important;
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
 }

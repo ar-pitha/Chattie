@@ -1,4 +1,14 @@
 /* ===== Root container - fills viewport exactly ===== */
+.chat-page,
+.chat-container,
+.chat-panel,
+.sidebar-panel,
+.auth-page,
+.auth-left,
+.auth-right {
+  overflow: hidden !important;
+}
+
 .chat-page {
   position: fixed;
   top: 0;

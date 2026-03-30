@@ -24,14 +24,33 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
   border-radius: 20px;
   padding: 36px 40px;
   max-width: 300px;
 }
 
 .empty-state-icon-wrap {
-  margin-bottom: 4px;
+  margin-bottom: -16px;
+}
+
+/* ===== Empty state SVG animations ===== */
+.empty-state-svg .anim-dot {
+  animation: esDotBounce 1.4s ease-in-out infinite;
+}
+.empty-state-svg .anim-dot-1 { animation-delay: 0s; }
+.empty-state-svg .anim-dot-2 { animation-delay: 0.2s; }
+.empty-state-svg .anim-dot-3 { animation-delay: 0.4s; }
+
+@keyframes esDotBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-5px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty-state-svg .anim-dot {
+    animation: none;
+  }
 }
 
 .empty-state-title {

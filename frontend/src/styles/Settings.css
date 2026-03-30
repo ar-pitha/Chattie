@@ -250,15 +250,15 @@
   height: 44px;
   width: 100%;
   background: transparent;
-  color: var(--color-danger);
-  border: 1.5px solid rgba(211, 47, 47, 0.25);
+  color: var(--primary);
+  border: 1.5px solid rgba(108, 99, 255, 0.25);
   border-radius: 10px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: background var(--transition), border-color var(--transition), transform 80ms ease;
 }
-.st-btn-danger:hover:not(:disabled) { background: rgba(211, 47, 47, 0.05); border-color: rgba(211, 47, 47, 0.5); }
+.st-btn-danger:hover:not(:disabled) { background: rgba(108, 99, 255, 0.05); border-color: rgba(108, 99, 255, 0.5); }
 .st-btn-danger:active:not(:disabled) { transform: scale(0.97); }
 .st-btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
 

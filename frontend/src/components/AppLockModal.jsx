@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { authAPI } from '../utils/api';
 import '../styles/AppLockModal.css';
 
@@ -6,15 +6,14 @@ const AppLockModal = ({ username, onUnlock, isOpen }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const debounceRef = useRef(null);
 
-  if (!isOpen) return null;
-
-  const handleVerify = async (e) => {
-    e.preventDefault();
+  const tryUnlock = useCallback(async (pwd) => {
+    if (!pwd || loading) return;
     setError('');
     setLoading(true);
     try {
-      await authAPI.verifyAppLockPassword(username, password);
+      await authAPI.verifyAppLockPassword(username, pwd);
       setPassword('');
       onUnlock();
     } catch (err) {
@@ -22,7 +21,19 @@ const AppLockModal = ({ username, onUnlock, isOpen }) => {
     } finally {
       setLoading(false);
     }
+  }, [username, onUnlock, loading]);
+
+  const handleChange = (e) => {
+    const val = e.target.value;
+    setPassword(val);
+    setError('');
+    clearTimeout(debounceRef.current);
+    if (val) {
+      debounceRef.current = setTimeout(() => tryUnlock(val), 600);
+    }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="al-overlay">
@@ -45,21 +56,18 @@ const AppLockModal = ({ username, onUnlock, isOpen }) => {
             <h2 className="al-title">App Locked</h2>
             <p className="al-subtitle">Enter your password to continue</p>
 
-            <form onSubmit={handleVerify} className="al-form">
+            <div className="al-form">
               <input
                 type="password"
                 placeholder="Password"
                 value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                onChange={handleChange}
                 disabled={loading}
                 autoFocus
-                required
               />
+              {loading && <p className="al-verifying">Verifying...</p>}
               {error && <p className="al-error">{error}</p>}
-              <button type="submit" disabled={loading || !password}>
-                {loading ? 'Verifying...' : 'Unlock'}
-              </button>
-            </form>
+            </div>
           </div>
         </div>
 

@@ -138,22 +138,13 @@
   margin: 0;
 }
 
-/* ===== Button ===== */
-.al-form button {
-  height: 42px;
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--transition), transform 80ms ease;
+/* ===== Verifying state ===== */
+.al-verifying {
+  font-size: 12px;
+  color: var(--primary);
+  margin: 0;
+  text-align: center;
 }
-
-.al-form button:hover:not(:disabled) { background: var(--primary-dark); }
-.al-form button:active:not(:disabled) { transform: scale(0.97); }
-.al-form button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
