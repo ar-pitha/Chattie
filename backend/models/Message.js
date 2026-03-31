@@ -103,5 +103,13 @@ const messageSchema = new mongoose.Schema({
 
 // Index for querying messages between two users
 messageSchema.index({ sender: 1, receiver: 1, timestamp: -1 });
+// Index for starred messages query
+messageSchema.index({ starredBy: 1, deletedForAll: 1 });
+// Index for pinned messages query
+messageSchema.index({ pinned: 1, deletedForAll: 1 });
+// Index for unseen reaction notifications
+messageSchema.index({ sender: 1, reactionSeenBy: 1, deletedForAll: 1 });
+// Index for message status updates (batch seen)
+messageSchema.index({ _id: 1, status: 1 });
 
 module.exports = mongoose.model('Message', messageSchema);

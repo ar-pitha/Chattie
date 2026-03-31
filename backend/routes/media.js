@@ -54,17 +54,21 @@ router.setIO = (socketIO, users) => {
   connectedUsers = users;
 };
 
-// Wait for GridFS to become ready (handles Render cold starts)
+// Wait for GridFS to become ready (event-driven, no polling)
 const waitForGridFS = (timeoutMs = 10000) => {
   return new Promise((resolve) => {
     if (gfs && isGridFSReady) return resolve(true);
-    const start = Date.now();
-    const check = () => {
-      if (gfs && isGridFSReady) return resolve(true);
-      if (Date.now() - start > timeoutMs) return resolve(false);
-      setTimeout(check, 500);
+    const timeout = setTimeout(() => resolve(false), timeoutMs);
+    const onReady = () => {
+      if (gfs && isGridFSReady) {
+        clearTimeout(timeout);
+        mongoose.connection.removeListener('open', onReady);
+        mongoose.connection.removeListener('reconnected', onReady);
+        resolve(true);
+      }
     };
-    check();
+    mongoose.connection.on('open', onReady);
+    mongoose.connection.on('reconnected', onReady);
   });
 };
 
@@ -206,32 +210,18 @@ router.post('/upload', upload.single('file'), async (req, res) => {
           { new: true }
         );
 
-        // Notify receiver's frontend of the new unread count via socket
         if (io && updatedUser) {
           const countsObj = updatedUser.unreadCounts
             ? Object.fromEntries(updatedUser.unreadCounts)
             : {};
           const newCount = countsObj[sender] || 1;
-          console.log(`📬 Media unread count: ${sender} → ${receiver}, count=${newCount}`);
-          const unreadData = { senderUsername: sender, count: newCount };
-          io.to(`user_${receiver}`).emit('unread-count-updated', unreadData);
-          // Direct socket fallback
-          const receiverSocketId = connectedUsers?.[receiver];
-          if (receiverSocketId) {
-            io.to(receiverSocketId).emit('unread-count-updated', unreadData);
-          }
+          io.to(`user_${receiver}`).emit('unread-count-updated', { senderUsername: sender, count: newCount });
         }
 
         const messageObject = message.toObject();
 
-        // Emit receive_message to receiver in real-time
         if (io) {
           io.to(`user_${receiver}`).emit('receive_message', messageObject);
-          // Direct socket fallback
-          const receiverSocketId = connectedUsers?.[receiver];
-          if (receiverSocketId) {
-            io.to(receiverSocketId).emit('receive_message', messageObject);
-          }
         }
 
         res.status(201).json({

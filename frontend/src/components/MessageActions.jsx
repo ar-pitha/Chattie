@@ -13,7 +13,9 @@ const MessageActions = ({
   onEdit,
   onStar,
   onPin,
-  onClose
+  onClose,
+  isMobile,
+  onOpenEmojiPicker
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -89,15 +91,41 @@ const MessageActions = ({
   const isStarred = message.starredBy?.includes(currentUsername);
   const isPinned = message.pinned;
 
-  // Compact inline icon bar — identical on desktop and mobile
+  const handleOpenEmoji = () => {
+    onOpenEmojiPicker?.(messageId);
+    onClose();
+  };
+
+  const handleCopy = () => {
+    if (message.text) {
+      navigator.clipboard.writeText(message.text).catch(() => {});
+    }
+    onClose();
+  };
+
+  const hasText = message.text && !message.deletedForAll && !message.callEvent;
+
+  // Compact inline icon bar
   return (
     <div className="message-actions" onClick={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()}>
-      <button className="action-btn reply-btn" onClick={handleReply} disabled={loading} title="Reply">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="9 17 4 12 9 7"/>
-          <path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
-        </svg>
-      </button>
+      {/* Desktop only: reply button (mobile uses swipe-to-reply) */}
+      {!isMobile && (
+        <button className="action-btn reply-btn" onClick={handleReply} disabled={loading} title="Reply">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 17 4 12 9 7"/>
+            <path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+          </svg>
+        </button>
+      )}
+
+      {hasText && (
+        <button className="action-btn copy-btn" onClick={handleCopy} disabled={loading} title="Copy text">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+        </button>
+      )}
 
       {canEdit && (
         <button className="action-btn edit-btn" onClick={handleEdit} disabled={loading} title="Edit">
@@ -135,6 +163,15 @@ const MessageActions = ({
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
             <line x1="10" y1="11" x2="10" y2="17"/>
             <line x1="14" y1="11" x2="14" y2="17"/>
+          </svg>
+        </button>
+      )}
+
+      {/* Mobile only: + button at the end to open emoji picker */}
+      {isMobile && (
+        <button className="action-btn emoji-plus-btn" onClick={handleOpenEmoji} disabled={loading} title="React">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
         </button>
       )}

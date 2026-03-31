@@ -62,14 +62,8 @@ exports.getMessages = async (req, res) => {
       { username: sender },
       { $unset: { [`unreadCounts.${receiver}`]: 1 } }
     );
-    // Notify frontend to clear the badge
     if (io) {
-      const clearData = { senderUsername: receiver };
-      io.to(`user_${sender}`).emit('unread-count-cleared', clearData);
-      const senderSocketId = connectedUsers?.[sender];
-      if (senderSocketId) {
-        io.to(senderSocketId).emit('unread-count-cleared', clearData);
-      }
+      io.to(`user_${sender}`).emit('unread-count-cleared', { senderUsername: receiver });
     }
 
     // Get all messages between two users
@@ -78,7 +72,7 @@ exports.getMessages = async (req, res) => {
         { sender, receiver },
         { sender: receiver, receiver: sender }
       ]
-    }).sort({ timestamp: 1 });
+    }).sort({ timestamp: 1 }).lean();
 
     const filteredMessages = messages
       .filter(msg => !(msg.deletedFor && msg.deletedFor.includes(sender)))
@@ -136,49 +130,18 @@ exports.saveMessage = async (req, res) => {
 
     // Notify receiver's frontend of the new unread count via socket
     if (io && updatedUser) {
-      // Safely read the count from the Mongoose Map
       const countsObj = updatedUser.unreadCounts
         ? Object.fromEntries(updatedUser.unreadCounts)
         : {};
       const newCount = countsObj[sender] || 1;
-      console.log(`📬 Unread count: ${sender} → ${receiver}, count=${newCount}`);
-      const unreadData = { senderUsername: sender, count: newCount };
-      io.to(`user_${receiver}`).emit('unread-count-updated', unreadData);
-      // Direct socket fallback
-      const receiverSocketId = connectedUsers?.[receiver];
-      if (receiverSocketId) {
-        io.to(receiverSocketId).emit('unread-count-updated', unreadData);
-      }
+      io.to(`user_${receiver}`).emit('unread-count-updated', { senderUsername: sender, count: newCount });
     }
 
     const messageObject = message.toObject();
 
-    // Emit receive_message to receiver in real-time (server-authoritative delivery)
-    // Use both room-based AND direct socket delivery for robustness in deployment
-    // (Render free tier can drop rooms after sleep/wake cycles)
+    // Emit receive_message to receiver in real-time (room-based delivery)
     if (io) {
-      console.log(`📡 Emitting receive_message to ${receiver}:`, {
-        sender,
-        receiver,
-        messageId: messageObject._id,
-        text: messageObject.text,
-        timestamp: messageObject.timestamp,
-        roomName: `user_${receiver}`,
-        io_available: !!io,
-        connectedUsers: connectedUsers ? Object.keys(connectedUsers) : [],
-        receiverSocketId: connectedUsers?.[receiver] || 'NOT_FOUND'
-      });
       io.to(`user_${receiver}`).emit('receive_message', messageObject);
-      // Direct socket fallback in case room membership was lost
-      const receiverSocketId = connectedUsers?.[receiver];
-      if (receiverSocketId) {
-        console.log(`✅ Sent to receiver socket ID: ${receiverSocketId}`);
-        io.to(receiverSocketId).emit('receive_message', messageObject);
-      } else {
-        console.warn(`⚠️ Receiver ${receiver} not found in connectedUsers. Sent to room only.`);
-      }
-    } else {
-      console.error(`❌ Socket.IO (io) is null! Cannot emit message.`);
     }
 
     res.status(201).json({ message: 'Message saved successfully', data: messageObject });
@@ -249,15 +212,10 @@ exports.editMessage = async (req, res) => {
 
     const msgObj = message.toObject();
 
-    // Notify both users in real-time
     if (io) {
       const editData = { messageId, text, editedAt: msgObj.editedAt, sender: message.sender, receiver: message.receiver };
       io.to(`user_${message.sender}`).emit('message_edited', editData);
       io.to(`user_${message.receiver}`).emit('message_edited', editData);
-      const senderSid = connectedUsers?.[message.sender];
-      const receiverSid = connectedUsers?.[message.receiver];
-      if (senderSid) io.to(senderSid).emit('message_edited', editData);
-      if (receiverSid) io.to(receiverSid).emit('message_edited', editData);
     }
 
     res.status(200).json({ message: 'Message edited', data: msgObj });
@@ -297,7 +255,7 @@ exports.getStarredMessages = async (req, res) => {
     const messages = await Message.find({
       starredBy: username,
       deletedForAll: { $ne: true }
-    }).sort({ timestamp: -1 }).limit(100);
+    }).sort({ timestamp: -1 }).limit(100).lean();
     res.status(200).json(messages);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching starred messages', error: error.message });
@@ -323,15 +281,10 @@ exports.togglePin = async (req, res) => {
 
     const msgObj = message.toObject();
 
-    // Notify both users
     if (io) {
       const pinData = { messageId, pinned: message.pinned, pinnedBy: username, message: msgObj };
       io.to(`user_${message.sender}`).emit('message_pinned', pinData);
       io.to(`user_${message.receiver}`).emit('message_pinned', pinData);
-      const senderSid = connectedUsers?.[message.sender];
-      const receiverSid = connectedUsers?.[message.receiver];
-      if (senderSid) io.to(senderSid).emit('message_pinned', pinData);
-      if (receiverSid) io.to(receiverSid).emit('message_pinned', pinData);
     }
 
     res.status(200).json({ message: wasPinned ? 'Unpinned' : 'Pinned', data: msgObj });
@@ -353,7 +306,7 @@ exports.getPinnedMessages = async (req, res) => {
       ],
       pinned: true,
       deletedForAll: { $ne: true }
-    }).sort({ pinnedAt: -1 });
+    }).sort({ pinnedAt: -1 }).lean();
 
     res.status(200).json(pinned);
   } catch (error) {
@@ -384,14 +337,9 @@ exports.saveCallEvent = async (req, res) => {
     await message.save();
     const msgObj = message.toObject();
 
-    // Emit to both users
     if (io) {
       io.to(`user_${receiver}`).emit('receive_message', msgObj);
       io.to(`user_${sender}`).emit('receive_message', msgObj);
-      const receiverSid = connectedUsers?.[receiver];
-      const senderSid = connectedUsers?.[sender];
-      if (receiverSid) io.to(receiverSid).emit('receive_message', msgObj);
-      if (senderSid) io.to(senderSid).emit('receive_message', msgObj);
     }
 
     res.status(201).json({ data: msgObj });
@@ -443,15 +391,10 @@ exports.toggleReaction = async (req, res) => {
 
     await message.save();
 
-    // Notify both users in real-time
     if (io) {
       const reactionData = { messageId, emoji, username, added, reactions: message.reactions, messageSender: message.sender, messageReceiver: message.receiver, messageText: message.text };
       io.to(`user_${message.sender}`).emit('reaction_updated', reactionData);
       io.to(`user_${message.receiver}`).emit('reaction_updated', reactionData);
-      const senderSid = connectedUsers?.[message.sender];
-      const receiverSid = connectedUsers?.[message.receiver];
-      if (senderSid) io.to(senderSid).emit('reaction_updated', reactionData);
-      if (receiverSid) io.to(receiverSid).emit('reaction_updated', reactionData);
     }
 
     res.status(200).json({ message: added ? 'Reaction added' : 'Reaction removed', reactions: message.reactions });
@@ -470,7 +413,7 @@ exports.getUnseenReactions = async (req, res) => {
       'reactions.0': { $exists: true },
       reactionSeenBy: { $ne: username },
       deletedForAll: { $ne: true }
-    }).sort({ timestamp: -1 });
+    }).sort({ timestamp: -1 }).lean();
 
     // Group by conversation partner (receiver) — pick the most recent per partner
     const notifs = {};

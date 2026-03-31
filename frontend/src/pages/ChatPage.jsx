@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from '../components/Sidebar';
 import ChatWindow from '../components/ChatWindow';
 import MessageInput from '../components/MessageInput';
 import AppLockModal from '../components/AppLockModal';
 import Settings from '../components/Settings';
-import { authAPI, usersAPI, chatAPI } from '../utils/api';
+import { authAPI, usersAPI, chatAPI, mediaAPI, notificationAPI } from '../utils/api';
 import { disconnectSocket, emitUserLogout, initializeSocket, emitUserJoin, onUnreadCountUpdated, onUnreadCountCleared, emitClearUnreadCount, onUserOnline, onUserOffline, onTypingIndicator, onStopTyping, emitUserAway, emitUserBack, onReceiveMessage, onSocketConnect, onMessageStatusUpdated, onDeleteMessage, onReactionUpdated, getSocket } from '../utils/socket';
 import { setupForegroundNotifications, requestFCMToken, registerServiceWorker } from '../utils/firebase';
 import { useAppSecurity, setAppLockSession, wasAppLocked } from '../utils/security';
@@ -123,46 +123,65 @@ const ChatPage = ({ currentUser, onLogout, onCurrentUserUpdate }) => {
     initializeSocket();
     emitUserJoin(currentUser.username);
     setupForegroundNotifications(() => {});
+    // FCM init — non-blocking, uses SW ready event instead of busy-wait
     const initFCM = async () => {
       try {
         const sw = await registerServiceWorker();
         if (!sw) return;
-        let r = 0;
-        while (!sw.active && r < 10) { await new Promise(res => setTimeout(res, 500)); r++; }
-        if (!sw.active) return;
+        // Wait for SW to activate using event, not polling
+        if (!sw.active) {
+          await new Promise((resolve) => {
+            if (sw.installing || sw.waiting) {
+              const worker = sw.installing || sw.waiting;
+              worker.addEventListener('statechange', function onStateChange() {
+                if (worker.state === 'activated') {
+                  worker.removeEventListener('statechange', onStateChange);
+                  resolve();
+                }
+              });
+            } else {
+              resolve(); // already active
+            }
+            // Safety timeout — don't block forever
+            setTimeout(resolve, 5000);
+          });
+        }
         const token = await requestFCMToken();
         if (token && currentUser._id) await authAPI.updateFCMToken(currentUser._id, token);
-      } catch (e) { console.error('FCM init failed:', e); }
+      } catch {}
     };
     initFCM();
   }, [currentUser._id, currentUser.username]);
 
-  // Fetch last messages and unread counts — also re-fetch on socket reconnect
-  // (handles Render cold start where initial API call fails while backend wakes up)
+  // Fetch last messages and unread counts — debounced to prevent duplicate calls
+  const sidebarFetchTimerRef = useRef(null);
   const fetchSidebarData = useCallback(() => {
-    if (currentUser.username) {
-      chatAPI.getLastMessages(currentUser.username)
-        .then(r => setLastMessages(r.data || {}))
-        .catch(() => {});
-      // Fetch unseen reaction notifications
-      chatAPI.getUnseenReactions(currentUser.username)
-        .then(r => {
-          const notifs = {};
-          const data = r.data || {};
-          Object.entries(data).forEach(([otherUser, info]) => {
-            notifs[otherUser] = { emoji: info.emoji, text: info.text };
-          });
-          if (Object.keys(notifs).length > 0) {
-            setReactionNotifs(prev => ({ ...notifs, ...prev }));
-          }
-        })
-        .catch(() => {});
-    }
-    if (currentUser._id) {
-      usersAPI.getUnreadCounts(currentUser._id)
-        .then(r => setUnreadCounts(r.data.unreadCounts || {}))
-        .catch(() => {});
-    }
+    // Debounce: if called multiple times within 2s (e.g. mount + reconnect), only run once
+    if (sidebarFetchTimerRef.current) clearTimeout(sidebarFetchTimerRef.current);
+    sidebarFetchTimerRef.current = setTimeout(() => {
+      if (currentUser.username) {
+        chatAPI.getLastMessages(currentUser.username)
+          .then(r => setLastMessages(r.data || {}))
+          .catch(() => {});
+        chatAPI.getUnseenReactions(currentUser.username)
+          .then(r => {
+            const notifs = {};
+            const data = r.data || {};
+            Object.entries(data).forEach(([otherUser, info]) => {
+              notifs[otherUser] = { emoji: info.emoji, text: info.text };
+            });
+            if (Object.keys(notifs).length > 0) {
+              setReactionNotifs(prev => ({ ...notifs, ...prev }));
+            }
+          })
+          .catch(() => {});
+      }
+      if (currentUser._id) {
+        usersAPI.getUnreadCounts(currentUser._id)
+          .then(r => setUnreadCounts(r.data.unreadCounts || {}))
+          .catch(() => {});
+      }
+    }, 300);
   }, [currentUser.username, currentUser._id]);
 
   useEffect(() => {
@@ -302,6 +321,84 @@ const ChatPage = ({ currentUser, onLogout, onCurrentUserUpdate }) => {
 
   const isChatOpen = selectedUser !== null;
 
+  // --- Drag-and-drop file upload ---
+  const [isDragging, setIsDragging] = useState(false);
+  const [dropUploading, setDropUploading] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  const getMediaType = (file) => {
+    if (file.type.startsWith('image/')) return 'photo';
+    if (file.type.startsWith('video/')) return 'video';
+    return 'document';
+  };
+
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer?.types?.includes('Files')) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback(async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+
+    if (!selectedUser) return;
+
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (files.length === 0) return;
+
+    const maxSizes = { photo: 5, video: 50, document: 20 };
+
+    setDropUploading(true);
+    for (const file of files) {
+      const mediaType = getMediaType(file);
+      const maxSizeMB = maxSizes[mediaType];
+      if (file.size > maxSizeMB * 1024 * 1024) {
+        alert(`${file.name} is too large. Max ${mediaType} size is ${maxSizeMB}MB.`);
+        continue;
+      }
+      try {
+        const response = await mediaAPI.uploadMedia(
+          file,
+          currentUser.username,
+          selectedUser.username,
+          mediaType,
+          `📎 ${file.name}`
+        );
+        const savedMedia = response.data?.data;
+        if (savedMedia) handleMessageSent(savedMedia);
+        const mediaEmoji = { photo: '📸', video: '🎥', document: '📄' };
+        notificationAPI.sendNotificationByUsername(
+          selectedUser.username,
+          currentUser.username,
+          `${mediaEmoji[mediaType]} Sent you a ${mediaType}`
+        ).catch(() => {});
+      } catch (err) {
+        alert(`Failed to upload ${file.name}: ${err.response?.data?.message || err.message}`);
+      }
+    }
+    setDropUploading(false);
+  }, [selectedUser, currentUser.username, handleMessageSent]);
+
   return (
     <div className="chat-page">
       <AppLockModal username={currentUser.username} onUnlock={() => { setAppLockSession(currentUser.username); setAppLockModalOpen(false); }} isOpen={appLockModalOpen} />
@@ -327,7 +424,34 @@ const ChatPage = ({ currentUser, onLogout, onCurrentUserUpdate }) => {
             <Sidebar currentUser={currentUser} selectedUser={selectedUser} onSelectUser={handleSelectUser} users={users} setUsers={setUsers} unreadCounts={unreadCounts} typingUsers={typingUsers} lastMessageTimes={lastMessageTimes} lastMessages={lastMessages} reactionNotifs={reactionNotifs} onSettingsOpen={() => setSettingsModalOpen(true)} onLogout={handleLogout} onProfilePicUpdate={handleProfilePicUpdate} />
           )}
         </div>
-        <div className="chat-panel">
+        <div
+          className="chat-panel"
+          onDragEnter={selectedUser ? handleDragEnter : undefined}
+          onDragLeave={selectedUser ? handleDragLeave : undefined}
+          onDragOver={selectedUser ? handleDragOver : undefined}
+          onDrop={selectedUser ? handleDrop : undefined}
+        >
+          {/* Drop overlay */}
+          {isDragging && selectedUser && (
+            <div className="drop-overlay">
+              <div className="drop-overlay-content">
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span>Drop files to send</span>
+              </div>
+            </div>
+          )}
+          {dropUploading && (
+            <div className="drop-overlay">
+              <div className="drop-overlay-content">
+                <div className="drop-spinner"></div>
+                <span>Uploading...</span>
+              </div>
+            </div>
+          )}
           {/* Desktop: settings in center area. Mobile: hidden when settings open */}
           {settingsModalOpen ? (
             <div className="settings-desktop-panel">

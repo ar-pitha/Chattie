@@ -26,6 +26,7 @@
 .message-actions .action-btn:nth-child(4) { animation-delay: 0.12s; }
 .message-actions .action-btn:nth-child(5) { animation-delay: 0.16s; }
 .message-actions .action-btn:nth-child(6) { animation-delay: 0.20s; }
+.message-actions .action-btn:nth-child(7) { animation-delay: 0.24s; }
 
 @keyframes maBtnPop {
   from { opacity: 0; transform: scale(0.3); }
@@ -68,6 +69,7 @@
 }
 
 .reply-btn svg { color: var(--primary); }
+.copy-btn svg { color: var(--text-secondary); }
 .edit-btn svg { color: var(--primary); }
 .star-btn svg { color: #f0a500; }
 .star-btn.active svg { color: #f0a500; }
@@ -79,6 +81,8 @@
 .delete-all-btn:hover:not(:disabled) {
   background: rgba(234, 0, 56, 0.08);
 }
+
+.emoji-plus-btn svg { color: var(--primary); }
 
 .action-error {
   color: var(--color-danger);
@@ -167,9 +171,15 @@
 .reaction-pill:hover { transform: scale(1.12); }
 .reaction-pill:active { transform: scale(0.9); }
 
+/* Highlight own reaction */
+.reaction-pill.own {
+  background: #E8E6FF;
+  box-shadow: 0 1px 3px rgba(108, 99, 255, 0.2);
+}
+
 /* Extra space below message when reactions overflow the bottom */
 .message:has(.reaction-badges-inline) {
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
 /* ===== Mobile — emoji picker & actions below the message ===== */

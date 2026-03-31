@@ -18,11 +18,13 @@ import {
   onIceCandidate,
   onEndCall,
   emitMessageSeen,
+  emitMessageSeenBatch,
   emitMessageDelivered,
   emitClearUnreadCount,
   onMessageEdited,
   onMessagePinned,
   onReactionUpdated,
+  onMessagesStatusBatchUpdated,
 } from "../utils/socket";
 import MessageActions from "./MessageActions";
 import CallScreen from "./CallScreen";
@@ -121,8 +123,8 @@ const ChatWindow = ({
   const [showMenu, setShowMenu] = useState(false);
   const [activePanel, setActivePanel] = useState(null); // 'pinned' | 'starred' | 'callHistory' | null
   const [starredMessages, setStarredMessages] = useState([]);
-  const [swipingMsgId, setSwipingMsgId] = useState(null);
-  const [swipeX, setSwipeX] = useState(0);
+  // Swipe uses refs + direct DOM for 60fps, no re-renders during drag
+  const swipeRef = useRef({ msgId: null, x: 0, el: null, arrowEl: null });
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
   const [emojiPickerMsgId, setEmojiPickerMsgId] = useState(null);
   const hoverTimeoutRef = useRef(null);
@@ -141,6 +143,40 @@ const ChatWindow = ({
     typeof window !== "undefined" &&
     /iPhone|iPad|Android|webOS/i.test(navigator.userAgent);
 
+  // On mobile, when action bar opens on the last message, scroll so it's visible
+  useEffect(() => {
+    if (!isMobileDevice || !activeMessageId) return;
+    requestAnimationFrame(() => {
+      const el = messagesContainerRef.current?.querySelector(
+        `[data-msgid="${activeMessageId}"]`,
+      );
+      if (!el) return;
+      const container = messagesContainerRef.current;
+      const elBottom = el.offsetTop + el.offsetHeight + 50; // 50px extra for action bar
+      if (elBottom > container.scrollTop + container.clientHeight) {
+        container.scrollTo({ top: elBottom - container.clientHeight, behavior: 'smooth' });
+      }
+    });
+  }, [activeMessageId, isMobileDevice]);
+
+  // Swipe helper: apply transform directly to DOM (no re-render)
+  const applySwipeTransform = useCallback((el, x, arrowEl) => {
+    if (!el) return;
+    if (x > 0) {
+      el.style.transform = `translateX(${x}px)`;
+      el.style.transition = 'none';
+      el.style.willChange = 'transform';
+    } else {
+      el.style.transform = 'translateX(0)';
+      el.style.transition = 'transform 180ms cubic-bezier(0.2, 0.9, 0.3, 1)';
+      el.style.willChange = '';
+    }
+    if (arrowEl) {
+      arrowEl.style.opacity = x > 0 ? String(Math.min(x / 40, 1)) : '0';
+      arrowEl.style.display = x > 0 ? 'flex' : 'none';
+    }
+  }, []);
+
   // Touch handlers for swipe-to-reply + long-press actions
   const handleTouchStart = useCallback((e, msgId) => {
     const touch = e.touches[0];
@@ -150,58 +186,108 @@ const ChatWindow = ({
       startTime: Date.now(),
       isSwiping: false,
       longPressed: false,
-      longPressTimer: setTimeout(() => {
+      msgId: msgId || null,
+      longPressTimer: msgId ? setTimeout(() => {
+        if (touchRef.current.isSwiping) return;
         touchRef.current.longPressed = true;
-        // Trigger haptic feedback if available
         if (navigator.vibrate) navigator.vibrate(30);
         setActiveMessageId(msgId);
-      }, 500),
+      }, 500) : null,
     };
   }, []);
 
-  const handleTouchMove = useCallback((e, msgId) => {
+  const handleTouchMove = useCallback((e) => {
     const t = touchRef.current;
     const touch = e.touches[0];
     const dx = touch.clientX - t.startX;
     const dy = touch.clientY - t.startY;
 
-    // If vertical scroll detected, cancel swipe and long press
+    // Vertical scroll — cancel swipe
     if (Math.abs(dy) > 10 && !t.isSwiping) {
       clearTimeout(t.longPressTimer);
       return;
     }
 
-    // Swipe right detection (only positive direction)
+    // Swipe right detection
     if (dx > 10) {
       clearTimeout(t.longPressTimer);
       t.isSwiping = true;
-      const clamped = Math.min(dx, 80);
-      setSwipingMsgId(msgId);
-      setSwipeX(clamped);
+
+      // Find message element if not already found
+      if (!swipeRef.current.el && t.msgId) {
+        const el = messagesContainerRef.current?.querySelector(`[data-msgid="${t.msgId}"]`);
+        if (el) {
+          swipeRef.current.el = el;
+          swipeRef.current.arrowEl = el.querySelector('.swipe-reply-arrow');
+          swipeRef.current.msgId = t.msgId;
+        }
+      }
+      // If started from empty area, find closest message
+      if (!swipeRef.current.el) {
+        const target = document.elementFromPoint(touch.clientX, touch.clientY);
+        const msgEl = target?.closest?.('[data-msgid]');
+        if (msgEl) {
+          swipeRef.current.el = msgEl;
+          swipeRef.current.arrowEl = msgEl.querySelector('.swipe-reply-arrow');
+          swipeRef.current.msgId = msgEl.getAttribute('data-msgid');
+          t.msgId = swipeRef.current.msgId;
+        } else {
+          return;
+        }
+      }
+
+      // Rubber-band easing — direct DOM update, no React state
+      const clamped = Math.min(dx * 0.7, 80);
+      swipeRef.current.x = clamped;
+      applySwipeTransform(swipeRef.current.el, clamped, swipeRef.current.arrowEl);
     }
-  }, []);
+  }, [applySwipeTransform]);
 
   const handleTouchEnd = useCallback(
     (e, msg) => {
       const t = touchRef.current;
       clearTimeout(t.longPressTimer);
 
-      if (t.isSwiping && swipeX > 50) {
-        // Swipe threshold reached — trigger reply
-        handleReplyClick(msg);
-      } else if (!t.longPressed && !t.isSwiping && Date.now() - t.startTime < 300) {
-        // Quick tap — always open emoji picker on mobile
-        if (msg.deletedForAll) return;
-        setEmojiPickerMsgId(msg._id);
-        setActiveMessageId(null);
+      if (t.isSwiping && swipeRef.current.x > 40) {
+        // Find the message data to reply to
+        const targetMsgId = swipeRef.current.msgId;
+        const targetMsg = msg || (targetMsgId ? messages.find(m => String(m._id) === String(targetMsgId)) : null);
+        if (targetMsg && !targetMsg.deletedForAll) {
+          if (navigator.vibrate) navigator.vibrate(15);
+          handleReplyClick(targetMsg);
+        }
       }
 
-      setSwipingMsgId(null);
-      setSwipeX(0);
+      // Snap back via DOM
+      applySwipeTransform(swipeRef.current.el, 0, swipeRef.current.arrowEl);
+
+      // Reset swipe ref
+      swipeRef.current = { msgId: null, x: 0, el: null, arrowEl: null };
       t.isSwiping = false;
+      t.msgId = null;
     },
-    [swipeX],
+    [messages, applySwipeTransform],
   );
+
+  // Container-level touch handlers — for swipe starting on empty space
+  const handleContainerTouchStart = useCallback((e) => {
+    if (!isMobileDevice) return;
+    // Only handle if not on a message (message has its own handlers)
+    if (e.target?.closest?.('[data-msgid]')) return;
+    handleTouchStart(e, null);
+  }, [isMobileDevice, handleTouchStart]);
+
+  const handleContainerTouchMove = useCallback((e) => {
+    if (!isMobileDevice) return;
+    handleTouchMove(e);
+  }, [isMobileDevice, handleTouchMove]);
+
+  const handleContainerTouchEnd = useCallback((e) => {
+    if (!isMobileDevice) return;
+    if (touchRef.current.isSwiping) {
+      handleTouchEnd(e, null);
+    }
+  }, [isMobileDevice, handleTouchEnd]);
 
   const {
     callStatus,
@@ -274,7 +360,7 @@ const ChatWindow = ({
   }, [scrollTrigger, scrollToBottom]);
 
   useEffect(() => {
-    const unsubscribe = onMessageStatusUpdated((data) => {
+    const unsubSingle = onMessageStatusUpdated((data) => {
       if (data.sender === currentUser.username) {
         setMessages((prev) =>
           prev.map((msg) =>
@@ -285,7 +371,18 @@ const ChatWindow = ({
         );
       }
     });
-    return unsubscribe;
+    // Batch status updates (from batch seen)
+    const unsubBatch = onMessagesStatusBatchUpdated((data) => {
+      if (data.sender === currentUser.username && data.messageIds) {
+        const idSet = new Set(data.messageIds.map(String));
+        setMessages((prev) =>
+          prev.map((msg) =>
+            idSet.has(String(msg._id)) ? { ...msg, status: data.status } : msg,
+          ),
+        );
+      }
+    });
+    return () => { unsubSingle(); unsubBatch(); };
   }, [currentUser.username]);
 
   useEffect(() => {
@@ -297,18 +394,7 @@ const ChatWindow = ({
   }, [selectedUser?.username, currentUser.username, currentUser._id]);
 
   useEffect(() => {
-    console.log(
-      `🎧 [ChatWindow] Setting up receive_message listener for ${selectedUser?.username}`,
-    );
     const unsubscribe = onReceiveMessage((message) => {
-      console.log(`💬 ChatWindow received message:`, {
-        from: message.sender,
-        to: message.receiver,
-        text: message.text,
-        selectedUserUsername: selectedUser?.username,
-        currentUserUsername: currentUser.username,
-      });
-
       const isForConvo =
         selectedUser &&
         ((message.sender === currentUser.username &&
@@ -316,14 +402,9 @@ const ChatWindow = ({
           (message.sender === selectedUser.username &&
             message.receiver === currentUser.username));
 
-      console.log(`📍 Is message for current conversation? ${isForConvo}`);
-
       if (isForConvo) {
-        console.log(`✅ Adding message to current conversation`);
         emitMessageDelivered(message._id, currentUser.username, message.sender);
         emitMessageSeen(message._id, currentUser.username, message.sender);
-        // Backend increments unread in saveMessage, but we're viewing this chat,
-        // so immediately clear it
         emitClearUnreadCount(currentUser.username, message.sender);
         onClearUnread?.(message.sender);
         setMessages((prev) => {
@@ -335,27 +416,14 @@ const ChatWindow = ({
               Math.abs(new Date(m.timestamp) - new Date(message.timestamp)) <
                 2000,
           );
-          if (dup) {
-            console.log(`⚠️ Duplicate message detected, skipping`);
-            return prev;
-          }
-          console.log(`🆕 Adding new message to state`);
+          if (dup) return prev;
           return [...prev, message];
         });
       } else if (message.receiver === currentUser.username) {
-        // Message is for me but I'm on a different chat (or home screen)
         emitMessageDelivered(message._id, currentUser.username, message.sender);
-        // Backend handles unread count: saveMessage increments in DB and
-        // emits 'unread-count-updated' with the absolute count via socket.
-        // No local increment here — avoids double-counting.
       }
     });
-    return () => {
-      console.log(
-        `🎧 [ChatWindow] Unsubscribing from receive_message listener for ${selectedUser?.username}`,
-      );
-      unsubscribe();
-    };
+    return unsubscribe;
   }, [selectedUser?.username, currentUser.username]);
 
   useEffect(() => {
@@ -524,6 +592,18 @@ const ChatWindow = ({
     prevMsgCountRef.current = newCount;
   }, [messages]);
 
+  // Auto-scroll to bottom when typing indicator appears so dots are always visible
+  useEffect(() => {
+    if (isTyping) {
+      requestAnimationFrame(() => {
+        const container = messagesContainerRef.current;
+        if (container) {
+          container.scrollTop = container.scrollHeight;
+        }
+      });
+    }
+  }, [isTyping]);
+
   const fetchMessages = async () => {
     setLoading(true);
     try {
@@ -532,35 +612,15 @@ const ChatWindow = ({
         selectedUser.username,
       );
 
-      // Debug log to check media field structure
-      const messagesWithMedia = response.data.filter(
-        (m) => m.media && m.media.fileId,
-      );
-      const messagesWithoutMedia = response.data.filter(
-        (m) => !m.media || !m.media.fileId,
-      );
-
-      console.log(
-        `📊 Messages fetched - Total: ${response.data.length}, With Media: ${messagesWithMedia.length}, Without: ${messagesWithoutMedia.length}`,
-      );
-
-      if (messagesWithMedia.length > 0) {
-        console.log("✅ Sample media message:", messagesWithMedia[0]);
-      }
-      if (messagesWithoutMedia.length > 0 && response.data[0]) {
-        console.log("📝 Sample text message:", messagesWithoutMedia[0]);
-      }
-
       setMessages(response.data);
 
-      // Mark unseen messages from the other user as 'seen' via socket
-      // This notifies the sender in real-time so their ticks update
-      const unseenFromOther = response.data.filter(
-        (msg) => msg.sender === selectedUser.username && msg.status !== "seen",
-      );
-      unseenFromOther.forEach((msg) => {
-        emitMessageSeen(msg._id, currentUser.username, msg.sender);
-      });
+      // Mark unseen messages from the other user as 'seen' via a single batch call
+      const unseenIds = response.data
+        .filter((msg) => msg.sender === selectedUser.username && msg.status !== "seen")
+        .map((msg) => msg._id);
+      if (unseenIds.length > 0) {
+        emitMessageSeenBatch(unseenIds, currentUser.username, selectedUser.username);
+      }
 
       setTimeout(() => {
         const container = messagesContainerRef.current;
@@ -1117,7 +1177,13 @@ const ChatWindow = ({
       )}
 
       <div className="chat-content-wrapper">
-        <div className="messages-container" ref={messagesContainerRef}>
+        <div
+          className="messages-container"
+          ref={messagesContainerRef}
+          onTouchStart={handleContainerTouchStart}
+          onTouchMove={handleContainerTouchMove}
+          onTouchEnd={handleContainerTouchEnd}
+        >
           {loading ? (
             <div className="loading-skeleton">
               <div className="skeleton-date" />
@@ -1218,19 +1284,6 @@ const ChatWindow = ({
 
                 const isStarred = msg.starredBy?.includes(currentUser.username);
 
-                const msgSwipeStyle =
-                  swipingMsgId === msg._id && swipeX > 0
-                    ? {
-                        transform: `translateX(${swipeX}px)`,
-                        transition: "none",
-                      }
-                    : swipingMsgId !== msg._id
-                      ? {
-                          transform: "translateX(0)",
-                          transition: "transform 200ms ease-out",
-                        }
-                      : {};
-
                 return (
                   <div
                     key={item.key}
@@ -1258,13 +1311,18 @@ const ChatWindow = ({
                       !msg.deletedForAll && handleTouchStart(e, msg._id)
                     }
                     onTouchMove={(e) =>
-                      !msg.deletedForAll && handleTouchMove(e, msg._id)
+                      !msg.deletedForAll && handleTouchMove(e)
                     }
                     onTouchEnd={(e) =>
                       !msg.deletedForAll && handleTouchEnd(e, msg)
                     }
-                    style={msgSwipeStyle}
                   >
+                    {/* Swipe reply arrow — hidden by default, shown via DOM during swipe */}
+                    <div className="swipe-reply-arrow" style={{ display: 'none', opacity: 0 }}>
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+                      </svg>
+                    </div>
                     {msg.media && msg.media.fileId && !msg.deletedForAll ? (
                       <>
                         <MediaMessage message={msg} isOwn={isSent} onReply={handleReplyClick} replyingTo={replyingTo} allMedia={allMediaMessages} />
@@ -1440,6 +1498,11 @@ const ChatWindow = ({
                           onStar={handleStarToggle}
                           onPin={handlePinToggle}
                           onClose={() => setActiveMessageId(null)}
+                          isMobile={isMobileDevice}
+                          onOpenEmojiPicker={(id) => {
+                            setActiveMessageId(null);
+                            setEmojiPickerMsgId(id);
+                          }}
                         />
                       )}
                   </div>

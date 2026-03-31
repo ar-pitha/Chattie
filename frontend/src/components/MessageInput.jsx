@@ -5,6 +5,8 @@ import ReplyPreview from './ReplyPreview';
 import MediaActions, { MediaPopup } from './MediaActions';
 import '../styles/MessageInput.css';
 
+const isMobile = typeof window !== 'undefined' && /iPhone|iPad|Android|webOS/i.test(navigator.userAgent);
+
 const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, onReplyCancel, editingMessage, onEditCancel, onEditDone, onMediaMenuToggle }) => {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -84,13 +86,6 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
       return;
     }
 
-    console.log(`
-📤 Sending message:`, {
-      from: currentUser.username,
-      to: selectedUser.username,
-      text: text.trim()
-    });
-
     setLoading(true);
     const messageText = text.trim();
     const replyData = replyingTo ? {
@@ -115,11 +110,6 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
     try {
       const saveResponse = await chatAPI.saveMessage(currentUser.username, selectedUser.username, messageText, replyData);
       const savedMessage = saveResponse.data?.data;
-
-      console.log(`✅ Message sent, backend response:`, {
-        savedMessage,
-        hasId: !!savedMessage?._id
-      });
 
       const messageForState = savedMessage || {
         sender: currentUser.username,
@@ -256,7 +246,9 @@ const MessageInput = ({ currentUser, selectedUser, onMessageSent, replyingTo, on
               handleTyping();
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              // Desktop: Enter sends, Shift+Enter newline
+              // Mobile: Enter inserts newline (send via button only)
+              if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
                 e.preventDefault();
                 if (text.trim()) handleSendMessage(e);
               }

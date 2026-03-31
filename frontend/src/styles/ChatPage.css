@@ -108,6 +108,57 @@
   overflow: hidden;
   min-width: 0;
   background: #ffffff;
+  position: relative;
+}
+
+/* ===== Drag-and-drop overlay ===== */
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: rgba(108, 99, 255, 0.08);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px dashed var(--primary);
+  border-radius: 8px;
+  margin: 4px;
+  pointer-events: none;
+  animation: dropFadeIn 0.15s ease-out;
+}
+
+@keyframes dropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.drop-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--primary);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.drop-overlay-content svg {
+  color: var(--primary);
+  opacity: 0.8;
+}
+
+.drop-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(108, 99, 255, 0.2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: dropSpin 0.7s linear infinite;
+}
+
+@keyframes dropSpin {
+  to { transform: rotate(360deg); }
 }
 
 /* ===== Settings layout — desktop: in chat-panel, mobile: in sidebar ===== */

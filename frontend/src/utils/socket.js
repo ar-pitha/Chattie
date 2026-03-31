@@ -61,11 +61,7 @@ export const onSocketConnect = (callback) => {
 export const emitUserJoin = (username) => {
   currentUsername = username; // Store for reconnection
   const socket = getSocket();
-  console.log(`👤 Registering user: ${username}, socket ID: ${socket.id}, connected: ${socket.connected}`);
-  
-  // Emit immediately and ensure it's sent
   socket.emit('user_join', { username });
-  console.log(`✅ user_join event emitted for ${username}`);
 };
 
 export const emitSendMessage = (sender, receiver, text, replyTo = null, messageData = null) => {
@@ -100,40 +96,26 @@ export const emitStopTyping = (username, receiver) => {
 
 export const emitMessageDelivered = (messageId, readerUsername, originalSenderUsername) => {
   const socket = getSocket();
-  
-  if (!socket) {
-    console.error(`❌ Socket is null! Cannot emit message-delivered.`);
-    return;
-  }
-  
-  socket.emit('message-delivered', { 
-    messageId,
-    readerUsername,
-    originalSenderUsername
-  });
+  if (!socket) return;
+  socket.emit('message-delivered', { messageId, readerUsername, originalSenderUsername });
 };
 
 export const emitMessageSeen = (messageId, readerUsername, originalSenderUsername) => {
   const socket = getSocket();
-  
-  if (!socket) {
-    console.error(`❌ Socket is null! Cannot emit message-seen.`);
-    return;
-  }
-  
-  // Validate messageId before emitting
-  if (!messageId) {
-    console.warn(`⚠️ Cannot emit message-seen: messageId is undefined`, { messageId, readerUsername, originalSenderUsername });
-    return;
-  }
-  
-  console.log(`📤 Emitting message-seen:`, { messageId: String(messageId), readerUsername, originalSenderUsername });
-  
-  socket.emit('message-seen', { 
-    messageId: String(messageId),
-    readerUsername,
-    originalSenderUsername
-  });
+  if (!socket || !messageId) return;
+  socket.emit('message-seen', { messageId: String(messageId), readerUsername, originalSenderUsername });
+};
+
+export const emitMessageSeenBatch = (messageIds, readerUsername, originalSenderUsername) => {
+  const socket = getSocket();
+  if (!socket || !messageIds || !messageIds.length) return;
+  socket.emit('messages-seen-batch', { messageIds, readerUsername, originalSenderUsername });
+};
+
+export const onMessagesStatusBatchUpdated = (callback) => {
+  const socket = getSocket();
+  socket.on('messages-status-batch-updated', callback);
+  return () => socket.off('messages-status-batch-updated', callback);
 };
 
 export const emitUserLogout = (username) => {
@@ -154,13 +136,11 @@ export const emitUserBack = (username) => {
 // Unread count events
 export const emitClearUnreadCount = (username, senderUsername) => {
   const socket = getSocket();
-  console.log(`📤 Emitting clear-unread-count: user=${username}, sender=${senderUsername}`);
   socket.emit('clear-unread-count', { username, senderUsername });
 };
 
 export const emitUnreadCountUpdate = (receiverUsername, senderUsername, count) => {
   const socket = getSocket();
-  console.log(`📤 Emitting unread-count-update: receiver=${receiverUsername}, sender=${senderUsername}, count=${count}`);
   socket.emit('unread-count-update', { receiverUsername, senderUsername, count });
 };
 
@@ -186,27 +166,8 @@ export const onUnreadCountCleared = (callback) => {
 
 export const onReceiveMessage = (callback) => {
   const socket = getSocket();
-  console.log(`🎧 Registering receive_message listener, socket connected: ${socket.connected}, socket ID: ${socket.id}`);
-  
-  const wrappedCallback = (message) => {
-    console.log(`📨 receive_message event received:`, {
-      from: message.sender,
-      to: message.receiver,
-      text: message.text,
-      messageId: message._id,
-      timestamp: message.timestamp,
-      media: message.media
-    });
-    callback(message);
-  };
-  
-  socket.on('receive_message', wrappedCallback);
-  
-  // Return unsubscribe function
-  return () => {
-    console.log(`🎧 Unregistering receive_message listener`);
-    socket.off('receive_message', wrappedCallback);
-  };
+  socket.on('receive_message', callback);
+  return () => socket.off('receive_message', callback);
 };
 
 export const onUserOnline = (callback) => {

@@ -53,9 +53,11 @@ app.use(cors({
 app.use(express.json());
 app.use(express.text({ type: 'text/plain' }));
 
-// Request logging middleware
+// Request logging middleware — skip noisy routes on free tier
 app.use((req, res, next) => {
-  console.log(`📍 ${req.method} ${req.path}`);
+  if (req.path !== '/socket.io/' && req.path !== '/') {
+    console.log(`${req.method} ${req.path}`);
+  }
   next();
 });
 
@@ -100,9 +102,6 @@ io.on('connection', (socket) => {
     const { username } = data;
     connectedUsers[username] = socket.id;
     socket.join(`user_${username}`);
-    console.log(`👤 User joined: ${username} (socket ID: ${socket.id})`);
-    console.log(`📋 Connected users:`, Object.keys(connectedUsers));
-    console.log(`🏠 Socket joined room: user_${username}`);
 
     // Mark online in DB
     const User = require('./models/User');
@@ -111,36 +110,33 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('user_online', { username });
   });
 
-  // Delete message for everyone
+  // Delete message for everyone — send only to the other user in the conversation
   socket.on('delete_message', (data) => {
-    console.log(`Message ${data.messageId} deleted by user`);
-    socket.broadcast.emit('message_deleted', {
-      messageId: data.messageId,
-      sender: data.sender,
-      receiver: data.receiver
-    });
+    const { messageId, sender, receiver } = data;
+    const payload = { messageId, sender, receiver };
+    io.to(`user_${sender}`).emit('message_deleted', payload);
+    io.to(`user_${receiver}`).emit('message_deleted', payload);
   });
 
-  // Delete message for me only
+  // Delete message for me only — send back to the same user's other tabs
   socket.on('delete_message_for_me', (data) => {
-    console.log(`Message ${data.messageId} deleted for ${data.username}`);
-    socket.broadcast.emit('message_deleted_for_me', {
+    io.to(`user_${data.username}`).emit('message_deleted_for_me', {
       messageId: data.messageId,
       username: data.username
     });
   });
 
-  // Typing indicator
+  // Typing indicator — send only to the intended receiver
   socket.on('user_typing', (data) => {
-    socket.broadcast.emit('typing_indicator', {
+    io.to(`user_${data.receiver}`).emit('typing_indicator', {
       username: data.username,
       receiver: data.receiver
     });
   });
 
-  // Stop typing
+  // Stop typing — send only to the intended receiver
   socket.on('user_stop_typing', (data) => {
-    socket.broadcast.emit('stop_typing', {
+    io.to(`user_${data.receiver}`).emit('stop_typing', {
       username: data.username,
       receiver: data.receiver
     });
@@ -149,83 +145,44 @@ io.on('connection', (socket) => {
   // Mark messages as delivered (when receiver opens the app)
   socket.on('message-delivered', (data) => {
     const { readerUsername, originalSenderUsername, messageId } = data;
-    console.log(`\n📦 message-delivered event received`);
-    console.log(`   Reader (receiver): ${readerUsername}`);
-    console.log(`   Sender: ${originalSenderUsername}`);
-    console.log(`   Message ID: ${messageId}`);
-    
+
     // Update message status to delivered
-    Message.findByIdAndUpdate(messageId, { status: 'delivered' }, { new: true })
-      .then(updatedMsg => {
-        console.log(`   ✅ Updated message status to "delivered"`);
-      })
-      .catch(err => {
-        console.error('❌ Error updating message status:', err.message);
-      });
-    
+    Message.findByIdAndUpdate(messageId, { status: 'delivered' }).catch(() => {});
+
     // Notify sender that message was delivered
-    const senderSocketId = connectedUsers?.[originalSenderUsername];
-    const deliveryData = {
-      messageId,
-      sender: originalSenderUsername,
-      receiver: readerUsername,
-      status: 'delivered'
-    };
-    
-    console.log(`   📤 Emitting message-status-updated to ${originalSenderUsername}`);
-    
-    if (senderSocketId) {
-      io.to(senderSocketId).emit('message-status-updated', deliveryData);
-      console.log(`   ✅ [DIRECT] Sent to socket`);
-    }
+    const deliveryData = { messageId, sender: originalSenderUsername, receiver: readerUsername, status: 'delivered' };
     io.to(`user_${originalSenderUsername}`).emit('message-status-updated', deliveryData);
-    console.log(`   ✅ [ROOM] Sent to user_${originalSenderUsername} room`);
   });
 
   // Mark messages as seen (when receiver opens the chat)
   socket.on('message-seen', (data) => {
     const { messageId, readerUsername, originalSenderUsername } = data;
-    console.log(`\n👁️ message-seen event received`);
-    console.log(`   Message ID: ${messageId}`);
-    console.log(`   Reader (receiver): ${readerUsername}`);
-    console.log(`   Sender: ${originalSenderUsername}`);
-    
-    // Update the specific message to "seen"
-    Message.findByIdAndUpdate(
-      messageId,
-      { status: 'seen' },
-      { new: true }
-    )
-      .then(updatedMessage => {
-        console.log(`   ✅ Updated message to "seen"`);
-        
-        // Notify sender that message was seen
-        const senderSocketId = connectedUsers?.[originalSenderUsername];
-        const seenData = {
-          messageId: messageId,
-          sender: originalSenderUsername,
-          receiver: readerUsername,
-          status: 'seen'
-        };
-        
-        console.log(`   📤 Emitting message-status-updated to ${originalSenderUsername}`);
-        
-        if (senderSocketId) {
-          io.to(senderSocketId).emit('message-status-updated', seenData);
-          console.log(`   ✅ [DIRECT] Sent to socket ${senderSocketId}`);
-        }
+
+    Message.findByIdAndUpdate(messageId, { status: 'seen' })
+      .then(() => {
+        const seenData = { messageId, sender: originalSenderUsername, receiver: readerUsername, status: 'seen' };
         io.to(`user_${originalSenderUsername}`).emit('message-status-updated', seenData);
-        console.log(`   ✅ [ROOM] Sent to user_${originalSenderUsername} room`);
       })
-      .catch(err => {
-        console.error('❌ Error updating message status:', err.message);
-      });
+      .catch(() => {});
+  });
+
+  // Batch mark messages as seen (reduces socket spam when opening a chat)
+  socket.on('messages-seen-batch', (data) => {
+    const { messageIds, readerUsername, originalSenderUsername } = data;
+    if (!messageIds || !messageIds.length) return;
+
+    Message.updateMany(
+      { _id: { $in: messageIds }, status: { $ne: 'seen' } },
+      { status: 'seen' }
+    ).then(() => {
+      const seenData = { messageIds, sender: originalSenderUsername, receiver: readerUsername, status: 'seen' };
+      io.to(`user_${originalSenderUsername}`).emit('messages-status-batch-updated', seenData);
+    }).catch(() => {});
   });
 
   // Clear unread count when user opens chat
   socket.on('clear-unread-count', async (data) => {
     const { username, senderUsername } = data;
-    console.log(`✅ clear-unread-count: ${username} cleared ${senderUsername}`);
 
     // Persist to DB - remove this sender's count
     try {
@@ -291,52 +248,29 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('user_offline', { username: data.username });
   });
 
-  // WebRTC Call Events — use both direct socket + room for reliable delivery
+  // WebRTC Call Events — room-based delivery
   socket.on('call-user', (data) => {
     const { to, from, offer, callType = 'audio' } = data;
-    const recipientSocketId = connectedUsers[to];
-
-    console.log(`📞 Call: ${from} → ${to} (${callType})`);
-
-    if (recipientSocketId) {
-      const payload = { from, offer, callType };
-      io.to(recipientSocketId).emit('call-user', payload);
-      io.to(`user_${to}`).emit('call-user', payload);
-      console.log(`   ✅ Call signal sent to ${to}`);
+    if (connectedUsers[to]) {
+      io.to(`user_${to}`).emit('call-user', { from, offer, callType });
     } else {
-      console.log(`   ❌ User ${to} not found`);
       io.to(socket.id).emit('user-offline', { message: `${to} is offline` });
     }
   });
 
   socket.on('answer-call', (data) => {
     const { to, from, answer } = data;
-    const callerSocketId = connectedUsers[to];
-    console.log(`✅ Call answered: ${from} → ${to}`);
-
-    const payload = { from, answer };
-    if (callerSocketId) io.to(callerSocketId).emit('answer-call', payload);
-    io.to(`user_${to}`).emit('answer-call', payload);
+    io.to(`user_${to}`).emit('answer-call', { from, answer });
   });
 
   socket.on('ice-candidate', (data) => {
     const { to, candidate } = data;
-    if (!candidate) return;
-    const targetSocketId = connectedUsers[to];
-
-    const payload = { candidate };
-    if (targetSocketId) io.to(targetSocketId).emit('ice-candidate', payload);
-    io.to(`user_${to}`).emit('ice-candidate', payload);
+    if (candidate) io.to(`user_${to}`).emit('ice-candidate', { candidate });
   });
 
   socket.on('end-call', (data) => {
     const { to, from, reason } = data;
-    console.log(`📵 Call ended: ${from} → ${to}${reason ? ` (${reason})` : ''}`);
-
-    const payload = { from, reason };
-    const targetSocketId = connectedUsers[to];
-    if (targetSocketId) io.to(targetSocketId).emit('end-call', payload);
-    io.to(`user_${to}`).emit('end-call', payload);
+    io.to(`user_${to}`).emit('end-call', { from, reason });
   });
 });
 
