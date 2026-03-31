@@ -23,6 +23,7 @@
   align-items: center;
   background: #1a1a1a;
   overflow: hidden;
+  transition: all 0.3s ease;
 }
 
 .remote-video {
@@ -32,7 +33,7 @@
   background: #000;
 }
 
-/* Local video (small preview) */
+/* Local video (small preview) — tap to swap */
 .local-video-container {
   position: absolute;
   bottom: 80px;
@@ -45,6 +46,11 @@
   border: 3px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   z-index: 10;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.local-video-container:active {
+  transform: scale(0.93);
 }
 
 .local-video {
@@ -58,12 +64,38 @@
   transform: scaleX(1); /* Back camera — no mirror */
 }
 
+.remote-video.mirror {
+  transform: scaleX(-1);
+}
+
+/* Swap hint icon on small video */
+.swap-hint {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  background: rgba(0,0,0,0.4);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
 /* Flip camera button */
 .flip-btn {
   background: rgba(255, 255, 255, 0.2) !important;
 }
 
-/* Call info overlay */
+/* PiP minimize button */
+.pip-btn {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Call info overlay — positioned on the full screen, not inside a container */
 .call-info-overlay {
   position: absolute;
   top: 0;
@@ -72,7 +104,9 @@
   padding: 24px;
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), transparent);
   z-index: 5;
+  pointer-events: none;
 }
+.call-info-overlay * { pointer-events: auto; }
 
 .call-header {
   display: flex;
@@ -331,5 +365,109 @@
 
   .call-stats {
     display: none; /* Hide stats on very small screens */
+  }
+}
+
+/* ===== Picture-in-Picture floating window ===== */
+.video-call-pip {
+  position: fixed;
+  bottom: 80px;
+  right: 16px;
+  width: 160px;
+  height: 220px;
+  background: #000;
+  border-radius: 14px;
+  overflow: hidden;
+  z-index: 999;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+  border: 2px solid rgba(255,255,255,0.15);
+  cursor: grab;
+  animation: pipIn 0.25s ease-out;
+  touch-action: none;
+}
+.video-call-pip:active { cursor: grabbing; }
+
+@keyframes pipIn {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.pip-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pip-local-video {
+  position: absolute;
+  bottom: 36px;
+  right: 6px;
+  width: 48px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1.5px solid rgba(255,255,255,0.25);
+  transform: scaleX(-1);
+}
+.pip-local-video.no-mirror {
+  transform: scaleX(1);
+}
+
+.pip-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 6px 8px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.7));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pip-name {
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pip-time {
+  color: rgba(255,255,255,0.8);
+  font-size: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.pip-end-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 59, 48, 0.85);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+}
+.pip-end-btn:active { transform: scale(0.9); }
+
+@media (max-width: 768px) {
+  .video-call-pip {
+    width: 130px;
+    height: 180px;
+    bottom: 70px;
+    right: 10px;
+  }
+  .pip-local-video {
+    width: 40px;
+    height: 54px;
   }
 }

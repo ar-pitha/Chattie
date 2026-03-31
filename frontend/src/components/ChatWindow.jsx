@@ -114,6 +114,7 @@ const ChatWindow = ({
   const [activeMessageId, setActiveMessageId] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [videoPip, setVideoPip] = useState(false);
 
   useEffect(() => {
     onTypingChange?.(isTyping);
@@ -319,6 +320,11 @@ const ChatWindow = ({
     callType,
   } = useWebRTCVideo(currentUser.username, selectedUser?.username);
 
+  // Floating date header — show while scrolling, fade after idle
+  const [floatingDate, setFloatingDate] = useState(null);
+  const [floatingDateVisible, setFloatingDateVisible] = useState(false);
+  const floatingDateTimerRef = useRef(null);
+
   const handleScroll = useCallback(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -326,6 +332,33 @@ const ChatWindow = ({
       container.scrollHeight - container.scrollTop - container.clientHeight >
         100,
     );
+
+    // Find the date for the current scroll position
+    // Pick the last date separator that is at or above the viewport top
+    const dateSeps = container.querySelectorAll('.date-separator');
+    const containerTop = container.getBoundingClientRect().top;
+    let currentDate = null;
+    for (const sep of dateSeps) {
+      const sepTop = sep.getBoundingClientRect().top;
+      if (sepTop <= containerTop + 50) {
+        currentDate = sep.querySelector('.date-separator-label')?.textContent;
+      } else {
+        // This separator is below the viewport top
+        // If we haven't found one above yet, use this first visible one
+        if (!currentDate) {
+          currentDate = sep.querySelector('.date-separator-label')?.textContent;
+        }
+        break;
+      }
+    }
+    if (currentDate) {
+      setFloatingDate(currentDate);
+      setFloatingDateVisible(true);
+      if (floatingDateTimerRef.current) clearTimeout(floatingDateTimerRef.current);
+      floatingDateTimerRef.current = setTimeout(() => {
+        setFloatingDateVisible(false);
+      }, 800);
+    }
   }, []);
 
   useEffect(() => {
@@ -333,7 +366,7 @@ const ChatWindow = ({
     if (!container) return;
     container.addEventListener("scroll", handleScroll, { passive: true });
     return () => container.removeEventListener("scroll", handleScroll);
-  }, [handleScroll]);
+  }, [handleScroll, selectedUser?.username]);
 
   const scrollToBottom = useCallback(() => {
     const container = messagesContainerRef.current;
@@ -940,7 +973,7 @@ const ChatWindow = ({
         <VideoCallScreen
           callStatus={callStatus}
           remoteUser={selectedUser.username}
-          onEndCall={endCall}
+          onEndCall={() => { setVideoPip(false); endCall(); }}
           remoteAudioRef={remoteAudioRef}
           remoteVideoRef={remoteVideoRef}
           localVideoRef={localVideoRef}
@@ -955,6 +988,8 @@ const ChatWindow = ({
           facingMode={facingMode}
           isVideoEnabled={isVideoEnabled}
           speakerEnabled={speakerEnabled}
+          isPip={videoPip}
+          onTogglePip={() => setVideoPip(p => !p)}
         />
       )}
       {callType === "audio" && callStatus && (
@@ -1520,21 +1555,22 @@ const ChatWindow = ({
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Floating date header — appears on scroll, fades when idle */}
+        {floatingDate && (
+          <div className={`floating-date ${floatingDateVisible ? 'visible' : ''}`}>
+            {floatingDate}
+          </div>
+        )}
+
         {showScrollBtn && (
           <button
             className="scroll-to-bottom"
             onClick={scrollToBottom}
             aria-label="Scroll to bottom"
           >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="6 9 12 15 18 9" />
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="7 13 12 18 17 13" />
+              <polyline points="7 6 12 11 17 6" />
             </svg>
           </button>
         )}
