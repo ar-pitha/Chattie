@@ -137,13 +137,16 @@ const VideoCallScreen = ({
         }}
       >
         <audio ref={remoteAudioRef} autoPlay playsInline controls={false} />
+        {/* Remote video fills the PiP window */}
         <video
           ref={remoteVideoRef}
           className="pip-video"
           autoPlay
           playsInline
           muted={false}
+          style={{ objectPosition: 'center top' }}
         />
+        {/* Local video small inset in PiP */}
         {isVideoEnabled && (
           <video
             ref={localVideoRef}
@@ -151,6 +154,7 @@ const VideoCallScreen = ({
             autoPlay
             playsInline
             muted
+            style={{ objectPosition: 'center top' }}
           />
         )}
         <div className="pip-info">
@@ -158,7 +162,7 @@ const VideoCallScreen = ({
           {callStatus === 'connected' && <span className="pip-time">{formattedTime}</span>}
         </div>
         <button className="pip-end-btn" onClick={(e) => { e.stopPropagation(); onEndCall(); }} aria-label="End call">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
