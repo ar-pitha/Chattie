@@ -34,16 +34,34 @@ const Auth = ({ onAuthSuccess }) => {
     setError("");
     setLoading(true);
     try {
+      // First initialize socket
       initializeSocket();
+      
+      // Then register and wait for Service Worker to be active
       await registerServiceWorker();
+      
+      // Now request FCM token (Service Worker is ready)
       const fcmToken = await requestFCMToken();
+      
+      // Perform login
       const response = await authAPI.login(username, password);
       const user = response.data.user;
-      if (fcmToken) await authAPI.updateFCMToken(user._id, fcmToken);
+      
+      // Update FCM token if we got one
+      if (fcmToken) {
+        try {
+          await authAPI.updateFCMToken(user._id, fcmToken);
+        } catch (tokenErr) {
+          console.warn('⚠️ Failed to update FCM token, but login succeeded:', tokenErr);
+        }
+      }
+      
+      // Join socket
       emitUserJoin(user.username);
       onAuthSuccess(user);
     } catch (err) {
       setError(err.response?.data?.message || "Login failed");
+      console.error('❌ Login error:', err);
     } finally {
       setLoading(false);
     }

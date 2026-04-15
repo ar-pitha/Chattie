@@ -92,6 +92,28 @@ export const registerServiceWorker = async () => {
       console.log(`   Scope: ${registration.scope}`);
       console.log(`   State: ${registration.installing ? 'installing' : registration.waiting ? 'waiting' : registration.active ? 'active' : 'unknown'}`);
       
+      // Wait for the Service Worker to be fully active
+      if (!registration.active) {
+        console.log('⏳ Waiting for Service Worker to become active...');
+        await new Promise((resolve) => {
+          const checkActive = () => {
+            if (registration.active) {
+              console.log('✅ Service Worker is now active');
+              resolve();
+            } else {
+              registration.addEventListener('updatefound', checkActive);
+            }
+          };
+          checkActive();
+          
+          // Fallback: resolve after 2 seconds even if not active
+          setTimeout(() => {
+            console.warn('⚠️ Service Worker activation timeout, proceeding anyway');
+            resolve();
+          }, 2000);
+        });
+      }
+      
       return registration;
     } else {
       console.error('❌ Service Workers not supported in this browser');
