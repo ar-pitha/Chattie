@@ -21,7 +21,8 @@ const io = socketIO(server, {
   cors: {
     origin: allowedOriginsIO,
     methods: ['GET', 'POST'],
-    credentials: true
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
   },
   // Polling support for stability on free tiers (Render)
   transports: ['websocket', 'polling'],
@@ -50,7 +51,10 @@ const allowedOrigins = [
 ].filter(Boolean);              // Remove undefined values
 
 app.use(cors({
-  origin: allowedOrigins
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 app.use(express.text({ type: 'text/plain' }));
