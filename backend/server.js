@@ -14,6 +14,7 @@ const allowedOriginsIO = [
   'http://localhost:5173',      // Local development
   'http://192.168.29.61:5173',  // Mobile testing on LAN
   'https://chattie-five.vercel.app',
+  'https://chattie-real.vercel.app',
   process.env.FRONTEND_URL      // Deployed frontend
 ].filter(Boolean);              // Remove undefined values
 
