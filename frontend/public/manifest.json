@@ -1,7 +1,7 @@
 {
-  "name": "Chat Application",
-  "short_name": "Chat",
-  "description": "Real-time text messaging application",
+  "name": "Tracker",
+  "short_name": "Tracker",
+  "description": "Productivity tracker",
   "start_url": "/index.html?utm_source=pwa",
   "scope": "/",
   "display": "standalone",
