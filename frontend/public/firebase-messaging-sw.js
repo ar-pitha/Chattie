@@ -19,8 +19,8 @@ self.addEventListener('push', function (event) {
     console.log('📨 Notification data:', notificationData);
 
     // Privacy-first: always show generic notification without sender name or message content
-    const title = 'Chattie';
-    const body = 'Hey! You got something new, open the app to check it out!';
+    const title = 'Tracker';
+    const body = 'Hey! Track ur daily activities, open the app to check it out!';
 
     const options = {
       body: body,

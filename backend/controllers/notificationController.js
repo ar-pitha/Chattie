@@ -18,9 +18,9 @@ exports.sendNotification = async (req, res) => {
     // Send notification using Firebase Admin SDK
     try {
       const message = {
-        notification: {
-          title,
-          body
+        data: {
+          title: String(title),
+          body: String(body)
         },
         token: receiver.fcm_token
       };
@@ -76,9 +76,12 @@ exports.sendNotificationByUsername = async (req, res) => {
     console.log(`   FCM Token: ${receiver.fcm_token.substring(0, 20)}...`);
 
     try {
+      // ponytail: data-only payload so the SW fully controls the notification UI.
+      // Sending `notification` here makes Chrome auto-render it (showing the origin URL
+      // and ignoring the SW's title). Data-only routes through our push handler.
       const message = {
-        notification: {
-          title: 'Chattie',
+        data: {
+          title: 'Tracker',
           body: 'Hey! You got a new message'
         },
         token: receiver.fcm_token
